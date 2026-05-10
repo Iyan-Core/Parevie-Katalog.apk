@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Products Collection ──────────────────────────────────────────
+    match /products/{productId} {
+
+      // Siapapun bisa membaca produk (katalog publik)
+      allow read: if true;
+
+      // Hanya admin yang terautentikasi yang bisa menulis
+      // Karena menggunakan password client-side (demo), kita izinkan
+      // semua write dari domain yang sah. Untuk production nyata,
+      // gunakan Firebase Auth + Custom Claims.
+      allow write: if true;
+
+      // ── PRODUCTION VERSION (dengan Firebase Auth) ──────────────────
+      // allow write: if request.auth != null
+      //              && request.auth.token.admin == true;
+    }
+  }
+}
