@@ -1,5 +1,32 @@
-# Object file
-*.o
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# Ada Library Information
-*.ali
+# Build output
+dist/
+dist-ssr/
+
+# Environment variables — JANGAN COMMIT!
+.env
+.env.local
+.env.*.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
