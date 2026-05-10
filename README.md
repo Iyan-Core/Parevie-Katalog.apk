@@ -167,6 +167,28 @@ firebase deploy --only hosting   # Deploy hosting saja
 
 ---
 
+katalog-pro/                          ← ROOT REPOSITORY GITHUB
+│
+├── .github/
+│   └── workflows/
+│       └── deploy.yml                ← CI/CD otomatis ke Firebase
+│
+├── src/
+│   ├── App.jsx                       ← Komponen utama React
+│   └── main.jsx                      ← Entry point React
+│
+├── .env.example                      ← Template env (COMMIT ini)
+├── .env                              ← Env asli (JANGAN COMMIT!)
+├── .gitignore                        ← Exclude .env & node_modules
+├── firebase.json                     ← Config Firebase Hosting
+├── firestore.indexes.json            ← Index query Firestore
+├── firestore.rules                   ← Security rules Firestore
+├── storage.rules                     ← Security rules Storage
+├── index.html                        ← HTML entry point
+├── package.json                      ← Dependencies & scripts
+├── vite.config.js                    ← Config bundler Vite
+└── README.md                         ← Dokumentasi project
+
 ## 📄 Lisensi
 
 MIT — bebas digunakan dan dimodifikasi.
