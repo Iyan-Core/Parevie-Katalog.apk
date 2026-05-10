@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Product Images ─────────────────────────────────────────────
+    match /products/{imageFile} {
+
+      // Siapapun bisa membaca/menampilkan gambar produk
+      allow read: if true;
+
+      // Upload hanya file gambar, max 5MB
+      allow write: if request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+
+      // ── PRODUCTION VERSION (dengan Firebase Auth) ──────────────────
+      // allow write: if request.auth != null
+      //              && request.auth.token.admin == true
+      //              && request.resource.size < 5 * 1024 * 1024
+      //              && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
