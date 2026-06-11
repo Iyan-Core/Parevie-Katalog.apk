@@ -55,14 +55,23 @@ const IconTag = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
 );
 
+// ─── SVG Placeholder (inline, tidak butuh internet) ───────────────────────
+const makePlaceholder = (label = "Foto Produk") => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="#1a1a28"/><rect x="160" y="100" width="80" height="65" rx="8" fill="none" stroke="#c9a84c" stroke-width="3"/><circle cx="175" cy="120" r="8" fill="#c9a84c"/><polyline points="160,165 185,140 205,155 225,128 240,165" fill="none" stroke="#c9a84c" stroke-width="3"/><text x="200" y="205" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#c9a84c" opacity="0.8">${label}</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+const IMG_PLACEHOLDER = makePlaceholder();
+
 // ─── Sample Data Seeder ────────────────────────────────────────────────────
+// image dikosongkan → tampil placeholder SVG built-in (offline-safe)
+// Isi image dengan URL Firebase Storage setelah upload foto produk Anda
 const SAMPLE_PRODUCTS = [
-  { name: "Wireless Headphones Pro", category: "Electronics", price: 299000, stock: 45, description: "Premium noise-cancelling wireless headphones with 40-hour battery life, studio-quality sound, and ultra-comfortable over-ear design.", image: "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&q=80", badge: "Best Seller" },
-  { name: "Ergonomic Office Chair", category: "Furniture", price: 2450000, stock: 12, description: "Full lumbar support with adjustable armrests, mesh backrest for breathability, and 5-year warranty. Designed for 8+ hour workdays.", image: "https://images.unsplash.com/photo-1592078615290-033ee584e267?w=600&q=80", badge: "New" },
-  { name: "Minimalist Watch", category: "Accessories", price: 875000, stock: 30, description: "Sapphire crystal glass, 316L stainless steel case, genuine leather strap. Water-resistant to 50m. Timeless Japanese quartz movement.", image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&q=80", badge: "" },
-  { name: "Cold Brew Coffee Kit", category: "Kitchen", price: 320000, stock: 60, description: "All-in-one cold brew system with 1.5L borosilicate glass carafe, fine mesh filter, and precision-etched measurements.", image: "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600&q=80", badge: "Sale" },
-  { name: "Running Shoes Ultra", category: "Sports", price: 1200000, stock: 25, description: "Carbon fiber plate technology, responsive foam midsole, engineered mesh upper. Certified for marathon racing by 3 national athletics boards.", image: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=600&q=80", badge: "" },
-  { name: "Ceramic Plant Pot Set", category: "Home Decor", price: 185000, stock: 80, description: "Hand-thrown ceramic pots with drainage holes and bamboo saucers. Set of 3 sizes. Each piece unique with natural glaze variations.", image: "https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=600&q=80", badge: "Eco" },
+  { name: "Wireless Headphones Pro", category: "Electronics", price: 299000, stock: 45, description: "Premium noise-cancelling wireless headphones dengan 40 jam baterai, suara studio quality, dan desain over-ear ultra-nyaman.", image: "", badge: "Best Seller" },
+  { name: "Ergonomic Office Chair", category: "Furniture", price: 2450000, stock: 12, description: "Full lumbar support dengan armrest adjustable, mesh backrest breathable, garansi 5 tahun. Dirancang untuk kerja 8+ jam.", image: "", badge: "New" },
+  { name: "Minimalist Watch", category: "Accessories", price: 875000, stock: 30, description: "Kaca kristal safir, case stainless steel 316L, tali kulit asli. Tahan air 50m. Gerakan quartz Jepang yang tak lekang waktu.", image: "", badge: "" },
+  { name: "Cold Brew Coffee Kit", category: "Kitchen", price: 320000, stock: 60, description: "Sistem cold brew all-in-one dengan carafe kaca borosilikat 1.5L, filter mesh halus, dan ukuran presisi terukir.", image: "", badge: "Sale" },
+  { name: "Running Shoes Ultra", category: "Sports", price: 1200000, stock: 25, description: "Teknologi carbon fiber plate, midsole busa responsif, upper mesh rekayasa. Tersertifikasi untuk lomba maraton.", image: "", badge: "" },
+  { name: "Ceramic Plant Pot Set", category: "Home Decor", price: 185000, stock: 80, description: "Pot keramik hand-thrown dengan lubang drainase dan alas bambu. Set 3 ukuran. Setiap buah unik dengan glasir alami.", image: "", badge: "Eco" },
 ];
 
 const CATEGORIES = ["All", "Electronics", "Furniture", "Accessories", "Kitchen", "Sports", "Home Decor"];
@@ -96,7 +105,11 @@ function ProductCard({ product, view, onSelect, isAdmin, onEdit, onDelete }) {
     return (
       <div className="product-list-item" onClick={() => onSelect(product)}>
         <div className="pli-img">
-          <img src={product.image || "https://placehold.co/120x120/1a1a2e/gold?text=IMG"} alt={product.name} />
+          <img
+            src={product.image || IMG_PLACEHOLDER}
+            alt={product.name}
+            onError={(e) => { e.target.onerror = null; e.target.src = IMG_PLACEHOLDER; }}
+          />
         </div>
         <div className="pli-body">
           <div className="pli-meta">
@@ -123,7 +136,12 @@ function ProductCard({ product, view, onSelect, isAdmin, onEdit, onDelete }) {
   return (
     <div className="product-card" onClick={() => onSelect(product)}>
       <div className="card-img-wrap">
-        <img src={product.image || "https://placehold.co/400x300/1a1a2e/gold?text=IMG"} alt={product.name} className="card-img" />
+        <img
+          src={product.image || IMG_PLACEHOLDER}
+          alt={product.name}
+          className="card-img"
+          onError={(e) => { e.target.onerror = null; e.target.src = IMG_PLACEHOLDER; }}
+        />
         {product.badge && <span className={`badge badge-${product.badge.toLowerCase().replace(" ", "-")}`}>{product.badge}</span>}
         {isAdmin && (
           <div className="card-admin-overlay" onClick={(e) => e.stopPropagation()}>
@@ -244,7 +262,11 @@ function ProductDetail({ product, onClose }) {
   return (
     <div className="detail">
       <div className="detail-img-wrap">
-        <img src={product.image || "https://placehold.co/600x400/1a1a2e/gold?text=IMG"} alt={product.name} />
+        <img
+          src={product.image || IMG_PLACEHOLDER}
+          alt={product.name}
+          onError={(e) => { e.target.onerror = null; e.target.src = IMG_PLACEHOLDER; }}
+        />
       </div>
       <div className="detail-body">
         <div className="detail-meta">
