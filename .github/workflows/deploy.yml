@@ -30,8 +30,8 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
 
-    - name: Setup Capacitor (version 5)
-         run: |
+      - name: Setup Capacitor (version 5)
+        run: |
            npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
            if [ ! -d "android" ]; then
