@@ -8,29 +8,18 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      # ── Java dulu, sebelum Gradle ──────────────────────────────────
-      - name: ☕ Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: ⚙️ Setup Node.js 20
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
 
-      - name: 📦 Install dependencies
-        run: npm ci
+      - name: Install dependencies
+        run: npm install --no-package-lock
 
-      # ── Build React → dist/ ────────────────────────────────────────
-      - name: 🏗️ Build React app
+      - name: Build React app
         run: npm run build
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
@@ -41,32 +30,27 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
 
-      # ── Capacitor: install → copy (TANPA cap init, karena
-      #    capacitor.config.json sudah ada di repo) ───────────────────
-      - name: 📱 Install Capacitor
+      - name: Setup Capacitor (version 5)
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
-
-      - name: 📂 Sync Capacitor → Android
-        run: |
-          npx cap add android || true   # skip jika folder android sudah ada
+          npx cap init KatalogPro com.katalogpro.app --web-dir=dist
+          npx cap add android
           npx cap copy android
-          npx cap sync android
 
-      # ── Gradle build ───────────────────────────────────────────────
-      - name: 🔨 Build APK (debug)
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"
+          ./gradlew assembleDebug --no-daemon
 
-      # ── Upload hasil ───────────────────────────────────────────────
-      - name: 📤 Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: KatalogPro-debug-${{ github.run_number }}
+          name: KatalogPro-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 14
