@@ -4,11 +4,7 @@ const config: CapacitorConfig = {
   appId: 'com.katalogpro.app',
   appName: 'KatalogPro',
   webDir: 'dist',
-  bundledWebRuntime: false,
-
-  server: {
-    androidScheme: 'https'
-  }
+  bundledWebRuntime: false
 };
 
 export default config;
