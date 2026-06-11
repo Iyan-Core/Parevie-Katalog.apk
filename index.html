@@ -9,6 +9,31 @@
   </head>
   <body>
     <div id="root"></div>
+    <!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="KatalogPro — Katalog Produk Premium dengan Firebase" />
+    <title>KatalogPro</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+  <script>
+  window.env = {
+    VITE_FIREBASE_API_KEY: "${{ secrets.VITE_FIREBASE_API_KEY }}",
+    VITE_FIREBASE_AUTH_DOMAIN: "${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}",
+    VITE_FIREBASE_PROJECT_ID: "${{ secrets.VITE_FIREBASE_PROJECT_ID }}",
+    VITE_FIREBASE_STORAGE_BUCKET: "${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}",
+    VITE_FIREBASE_MESSAGING_SENDER_ID: "${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}",
+    VITE_FIREBASE_APP_ID: "${{ secrets.VITE_FIREBASE_APP_ID }}",
+    VITE_ADMIN_PASSWORD: "${{ secrets.VITE_ADMIN_PASSWORD }}"
+  };
+</script>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
