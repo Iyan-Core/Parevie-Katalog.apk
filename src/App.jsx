@@ -43,17 +43,15 @@ const getImg = (p) => {
   return "";
 };
 
-// ── Normalisasi gender: male/man → "Male", female/woman → "Female", dst ──
 const normGender = (g="") => {
   const v = g.toLowerCase().trim();
-  if (["male","man"].includes(v))         return "Male";
-  if (["female","woman"].includes(v))     return "Female";
+  if (["male","man"].includes(v))          return "Male";
+  if (["female","woman"].includes(v))      return "Female";
   if (["unisex","both","all"].includes(v)) return "Unisex";
   return g ? g.charAt(0).toUpperCase()+g.slice(1) : "";
 };
 
-// ── Cek stok produk (support field stock atau size) ──
-const getStock = (p) => p.stock ?? p.size ?? 0;
+const getStock = (p) => Number(p.stock ?? p.size ?? 0);
 
 const Stars = ({val=0}) => {
   const full=Math.floor(val), half=val%1>=0.5;
@@ -71,21 +69,22 @@ const Stars = ({val=0}) => {
 
 // ─── Icons ─────────────────────────────────────────────────────────────────
 const Ic = {
-  Plus:  ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
-  Edit:  ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
-  Trash: ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>,
-  Search:()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-  Close: ()=><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  Admin: ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
-  Upload:()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>,
-  Tag:   ()=><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-  Sun:   ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
-  Moon:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
-  Send:  ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
-  Loc:   ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
-  Bell:  ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
-  Chat:  ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
-  Qris:  ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="21" y1="14" x2="21" y2="17"/></svg>,
+  Plus:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  Edit:   ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Trash:  ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6M9 6V4h6v2"/></svg>,
+  Search: ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+  Close:  ()=><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  Admin:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+  Upload: ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>,
+  Tag:    ()=><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
+  Sun:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  Moon:   ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  Send:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
+  Loc:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
+  Bell:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
+  Chat:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
+  Menu:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  Qris:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="21" y1="14" x2="21" y2="17"/></svg>,
 };
 
 // ─── Modal ─────────────────────────────────────────────────────────────────
@@ -112,7 +111,6 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
   const img   = getImg(p);
   const badge = p.bestSeller?"Best Seller":p.isNew?"New":(p.isSale||p.onSale)?"Sale":(p.badge||"");
   const stok  = getStock(p);
-
   return (
     <div className="card" onClick={()=>onSelect(p)}>
       <div className="card-img-wrap">
@@ -142,90 +140,137 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
   );
 }
 
-// ─── ORDER MODAL — pesanan + lokasi + QRIS + chat ─────────────────────────
-function OrderModal({p, onClose}) {
-  const stok      = getStock(p);
-  const [step,    setStep]    = useState("form");   // form | qris | chat
-  const [name,    setName]    = useState("");
-  const [phone,   setPhone]   = useState("");
-  const [addr,    setAddr]    = useState("");
-  const [note,    setNote]    = useState("");
-  const [locMsg,  setLocMsg]  = useState("");
-  const [orderId, setOId]     = useState(null);
-  const [msgs,    setMsgs]    = useState([]);
-  const [chatTxt, setChatTxt] = useState("");
+// ─── ORDER MODAL ───────────────────────────────────────────────────────────
+function OrderModal({p}) {
+  const stok       = getStock(p);
+  const [step,     setStep]    = useState("form");
+  const [name,     setName]    = useState("");
+  const [phone,    setPhone]   = useState("");
+  const [addr,     setAddr]    = useState("");
+  const [note,     setNote]    = useState("");
+  const [locState, setLocState]= useState("idle"); // idle | loading | done | error
+  const [gpsText,  setGpsText] = useState("");
+  const [orderId,  setOId]     = useState(null);
+  const [msgs,     setMsgs]    = useState([]);
+  const [chatTxt,  setChatTxt] = useState("");
+  const [submitting,setSub]    = useState(false);
   const chatRef = useRef(null);
 
-  // Ambil lokasi GPS
+  // ── GPS: gunakan promise agar tidak ada masalah callback ──
   const getLocation = () => {
-    setLocMsg("Mengambil lokasi…");
-    if(!navigator.geolocation){setLocMsg("GPS tidak tersedia");return;}
+    if (!navigator.geolocation) {
+      setLocState("error");
+      setGpsText("GPS tidak tersedia di perangkat ini");
+      return;
+    }
+    setLocState("loading");
+    setGpsText("Mengambil lokasi GPS…");
     navigator.geolocation.getCurrentPosition(
-      (pos)=>{
-        const {latitude:la,longitude:lo} = pos.coords;
-        setLocMsg(`📍 ${la.toFixed(5)}, ${lo.toFixed(5)}`);
-        setAddr(prev => prev + (prev?"\n":"")+`GPS: https://maps.google.com/?q=${la},${lo}`);
+      (pos) => {
+        const la = pos.coords.latitude.toFixed(6);
+        const lo = pos.coords.longitude.toFixed(6);
+        const mapsUrl = `https://maps.google.com/?q=${la},${lo}`;
+        setGpsText(`📍 ${la}, ${lo}`);
+        setLocState("done");
+        // Append ke alamat
+        setAddr(prev => {
+          const tag = `\nGPS: ${mapsUrl}`;
+          return prev.includes("GPS:") ? prev : prev + tag;
+        });
       },
-      ()=>setLocMsg("Izin lokasi ditolak")
+      (err) => {
+        setLocState("error");
+        const msg = err.code===1
+          ? "Izin lokasi ditolak. Buka Pengaturan → Izin → Lokasi."
+          : "Gagal mengambil lokasi. Coba lagi.";
+        setGpsText(msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
-  // Submit pesanan ke Firestore
+  // ── Submit pesanan ke Firestore ──
   const submitOrder = async () => {
-    if(!name||!phone||!addr) return alert("Nama, nomor WA & alamat wajib diisi!");
-    const payload = {
-      productId: p.id, productName: p.name, productImg: getImg(p),
-      price: p.price, buyerName: name, buyerPhone: phone,
-      address: addr, note, status: "pending",
-      createdAt: serverTimestamp(),
-    };
-    const oRef = await addDoc(collection(db,"orders"), payload);
-    setOId(oRef.id);
-    // Notif ke admin (collection notifications)
-    await addDoc(collection(db,"notifications"),{
-      type:"new_order", orderId:oRef.id,
-      message:`Pesanan baru: ${p.name} dari ${name} (${phone})`,
-      address: addr, read:false, createdAt: serverTimestamp(),
-    });
-    setStep("qris");
-  };
+    if (!name.trim())  return alert("Nama wajib diisi!");
+    if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
+    if (!addr.trim())  return alert("Alamat pengiriman wajib diisi!");
+    setSub(true);
+    try {
+      // 1. Simpan pesanan
+      const oRef = await addDoc(collection(db,"orders"), {
+        productId:   p.id,
+        productName: p.name,
+        productImg:  getImg(p),
+        price:       p.price,
+        buyerName:   name.trim(),
+        buyerPhone:  phone.trim(),
+        address:     addr.trim(),
+        note:        note.trim(),
+        status:      "pending",
+        createdAt:   serverTimestamp(),
+      });
+      setOId(oRef.id);
 
-  // Konfirmasi bayar → lanjut ke chat
-  const confirmPay = async () => {
-    if(orderId) await updateDoc(doc(db,"orders",orderId),{status:"paid_pending_confirm"});
-    // Buat room chat
-    if(orderId){
-      await addDoc(collection(db,`orders/${orderId}/chats`),{
-        from:"buyer", text:`Halo! Saya sudah transfer untuk pesanan ${p.name}. Mohon dikonfirmasi ya 🙏`,
+      // 2. Kirim notifikasi ke admin
+      await addDoc(collection(db,"notifications"), {
+        type:      "new_order",
+        orderId:   oRef.id,
+        message:   `🛒 Pesanan baru: ${p.name}`,
+        detail:    `Dari: ${name.trim()} (${phone.trim()})`,
+        address:   addr.trim(),
+        read:      false,
         createdAt: serverTimestamp(),
       });
+
+      // 3. Pesan otomatis di chat
+      await addDoc(collection(db,`orders/${oRef.id}/chats`), {
+        from:      "system",
+        text:      `Pesanan diterima! Silakan tunggu konfirmasi admin. Produk: ${p.name} — ${fRp(p.price)}`,
+        createdAt: serverTimestamp(),
+      });
+
+      setStep("qris");
+    } catch(e) {
+      alert("Gagal membuat pesanan: " + e.message);
     }
+    setSub(false);
+  };
+
+  // ── Konfirmasi sudah bayar ──
+  const confirmPay = async () => {
+    if (!orderId) return;
+    await updateDoc(doc(db,"orders",orderId), { status:"paid_pending_confirm" });
+    await addDoc(collection(db,`orders/${orderId}/chats`), {
+      from:"buyer",
+      text:`Halo Admin! Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
+      createdAt: serverTimestamp(),
+    });
     setStep("chat");
   };
 
-  // Listen chat realtime
+  // ── Chat realtime ──
   useEffect(()=>{
-    if(step!=="chat"||!orderId) return;
-    const q = query(collection(db,`orders/${orderId}/chats`),orderBy("createdAt","asc"));
+    if (step!=="chat"||!orderId) return;
+    const q = query(collection(db,`orders/${orderId}/chats`), orderBy("createdAt","asc"));
     const unsub = onSnapshot(q, snap=>{
       setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,9999),100);
+      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
     return ()=>unsub();
   },[step,orderId]);
 
   const sendChat = async () => {
-    if(!chatTxt.trim()||!orderId) return;
-    await addDoc(collection(db,`orders/${orderId}/chats`),{
+    if (!chatTxt.trim()||!orderId) return;
+    await addDoc(collection(db,`orders/${orderId}/chats`), {
       from:"buyer", text:chatTxt.trim(), createdAt:serverTimestamp(),
     });
     setChatTxt("");
   };
 
   // ── STEP: form ──
-  if(step==="form") return (
+  if (step==="form") return (
     <div className="ord-wrap">
-      <div className="ord-header">
+      <div className="ord-hdr">
         <img src={getImg(p)||IMG_PH} alt={p.name} className="ord-thumb"
           onError={(e)=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
         <div>
@@ -234,55 +279,81 @@ function OrderModal({p, onClose}) {
         </div>
       </div>
       <div className="ord-body">
-        <div className="fg"><label>Nama Lengkap *</label>
-          <input className="finput" value={name} onChange={e=>setName(e.target.value)} placeholder="Nama penerima"/></div>
-        <div className="fg"><label>No. WhatsApp *</label>
-          <input className="finput" type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08xxxxxxxxxx"/></div>
         <div className="fg">
-          <label>Alamat Pengiriman * <span style={{color:"var(--text3)",fontWeight:400}}>(+ lokasi GPS untuk keamanan)</span></label>
-          <textarea className="finput ftarea" rows={3} value={addr}
-            onChange={e=>setAddr(e.target.value)} placeholder="Jalan, RT/RW, Kelurahan, Kota…"/>
-          <button className="btn-loc" onClick={getLocation}><Ic.Loc/> Tambah Lokasi GPS</button>
-          {locMsg && <p className="loc-msg">{locMsg}</p>}
+          <label>Nama Lengkap *</label>
+          <input className="finput" value={name} onChange={e=>setName(e.target.value)} placeholder="Nama penerima"/>
         </div>
-        <div className="fg"><label>Catatan (opsional)</label>
-          <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Ukuran, warna, dll…"/></div>
+        <div className="fg">
+          <label>No. WhatsApp *</label>
+          <input className="finput" type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08xxxxxxxxxx"/>
+        </div>
+        <div className="fg">
+          <label>Alamat Pengiriman *</label>
+          <textarea className="finput ftarea" rows={3} value={addr}
+            onChange={e=>setAddr(e.target.value)}
+            placeholder="Jalan, RT/RW, Kelurahan, Kota, Kode Pos…"/>
+          {/* Tombol GPS — pastikan onclick berjalan */}
+          <button
+            type="button"
+            className={`btn-loc${locState==="loading"?" loading":locState==="done"?" done":""}`}
+            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); getLocation(); }}
+          >
+            <Ic.Loc/>
+            {locState==="loading" ? " Mengambil GPS…" :
+             locState==="done"    ? " Lokasi Tersimpan ✓" :
+             locState==="error"   ? " Coba Lagi" : " Tambah Lokasi GPS"}
+          </button>
+          {gpsText && (
+            <p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>
+              {gpsText}
+            </p>
+          )}
+        </div>
+        <div className="fg">
+          <label>Catatan (opsional)</label>
+          <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/>
+        </div>
         <div className="ord-info">
           <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong> (admin pilihkan)</p>
-          <p>💳 Pembayaran via <strong>QRIS</strong> setelah pesanan dikonfirmasi</p>
+          <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
         </div>
-        <button className="btn-order" onClick={submitOrder}>📦 Buat Pesanan</button>
+        <button
+          type="button"
+          className="btn-order"
+          onClick={submitOrder}
+          disabled={submitting}
+        >
+          {submitting ? "⏳ Mengirim Pesanan…" : "📦 Buat Pesanan"}
+        </button>
       </div>
     </div>
   );
 
   // ── STEP: qris ──
-  if(step==="qris") return (
+  if (step==="qris") return (
     <div className="ord-wrap">
-      <div className="qris-head">
-        <Ic.Qris/> <span>Pembayaran QRIS</span>
-      </div>
+      <div className="qris-head"><Ic.Qris/> <span>Pembayaran QRIS</span></div>
       <div className="qris-body">
         <p className="qris-amount">{fRp(p.price)}</p>
-        <p style={{color:"var(--text3)",fontSize:".83rem",marginBottom:16}}>
+        <p style={{color:"var(--text3)",fontSize:".82rem",marginBottom:16}}>
           Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
         </p>
-        {/* Placeholder QRIS — ganti dengan gambar QRIS asli */}
         <div className="qris-placeholder">
           <Ic.Qris/>
           <p>Scan QRIS di sini</p>
-          <p style={{fontSize:".75rem",marginTop:4,color:"var(--text3)"}}>
-            Ganti dengan gambar QRIS toko Anda di<br/>
-            <code>src/App.jsx → qris-placeholder</code>
+          <p style={{fontSize:".72rem",marginTop:4,color:"var(--text3)"}}>
+            Ganti dengan gambar QRIS toko Anda
           </p>
         </div>
         <div className="qris-steps">
-          <p>1. Buka aplikasi e-wallet / m-banking</p>
+          <p>1. Buka e-wallet / m-banking</p>
           <p>2. Scan kode QR di atas</p>
           <p>3. Bayar tepat <strong>{fRp(p.price)}</strong></p>
           <p>4. Klik tombol di bawah setelah transfer</p>
         </div>
-        <button className="btn-order" onClick={confirmPay}>✅ Saya Sudah Bayar → Chat Admin</button>
+        <button type="button" className="btn-order" onClick={confirmPay}>
+          ✅ Sudah Bayar → Chat Admin
+        </button>
       </div>
     </div>
   );
@@ -295,18 +366,18 @@ function OrderModal({p, onClose}) {
         <span className="chat-status">● Online</span>
       </div>
       <div className="chat-info">
-        Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}
+        #{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}
       </div>
       <div className="chat-msgs" ref={chatRef}>
-        {msgs.length===0 && (
-          <p className="chat-empty">Menunggu balasan admin…</p>
-        )}
         {msgs.map(m=>(
-          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":"left"}`}>
-            <div className="cbubble">{m.text}</div>
-            <span className="ctime">
-              {m.from==="buyer"?"Saya":"Admin"}
-            </span>
+          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
+            {m.from==="system"
+              ? <div className="csys">{m.text}</div>
+              : <>
+                  <div className="cbubble">{m.text}</div>
+                  <span className="ctime">{m.from==="buyer"?"Saya":"Admin"}</span>
+                </>
+            }
           </div>
         ))}
       </div>
@@ -314,14 +385,14 @@ function OrderModal({p, onClose}) {
         <input className="finput" style={{flex:1}} placeholder="Ketik pesan…"
           value={chatTxt} onChange={e=>setChatTxt(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
-        <button className="btn-send" onClick={sendChat}><Ic.Send/></button>
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
       </div>
     </div>
   );
 }
 
 // ─── ADMIN CHAT PANEL ──────────────────────────────────────────────────────
-function AdminChatPanel({onClose}) {
+function AdminChatPanel() {
   const [orders,  setOrders]  = useState([]);
   const [selOrd,  setSelOrd]  = useState(null);
   const [msgs,    setMsgs]    = useState([]);
@@ -329,83 +400,81 @@ function AdminChatPanel({onClose}) {
   const chatRef = useRef(null);
 
   useEffect(()=>{
-    const q = query(collection(db,"orders"),orderBy("createdAt","desc"));
-    return onSnapshot(q,snap=>setOrders(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const q = query(collection(db,"orders"), orderBy("createdAt","desc"));
+    return onSnapshot(q, snap=>setOrders(snap.docs.map(d=>({id:d.id,...d.data()}))));
   },[]);
 
   useEffect(()=>{
-    if(!selOrd) return;
-    const q = query(collection(db,`orders/${selOrd.id}/chats`),orderBy("createdAt","asc"));
-    return onSnapshot(q,snap=>{
+    if (!selOrd) return;
+    const q = query(collection(db,`orders/${selOrd.id}/chats`), orderBy("createdAt","asc"));
+    return onSnapshot(q, snap=>{
       setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,9999),100);
+      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
   },[selOrd]);
 
   const send = async () => {
-    if(!txt.trim()||!selOrd) return;
+    if (!txt.trim()||!selOrd) return;
     await addDoc(collection(db,`orders/${selOrd.id}/chats`),{
       from:"admin", text:txt.trim(), createdAt:serverTimestamp(),
     });
     setTxt("");
   };
 
-  const updateStatus = async (status) => {
-    if(!selOrd) return;
-    await updateDoc(doc(db,"orders",selOrd.id),{status});
-    setSelOrd(o=>({...o,status}));
+  const updStatus = async (s) => {
+    if (!selOrd) return;
+    await updateDoc(doc(db,"orders",selOrd.id),{status:s});
+    setSelOrd(o=>({...o,status:s}));
   };
 
-  const STATUS_COLOR = {
-    pending:"#c9a84c", paid_pending_confirm:"#7c6af5",
-    confirmed:"#4caf82", shipped:"#29b6f6", done:"#4caf82", cancelled:"#e05a5a"
-  };
+  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
 
   return (
     <div className="acp">
       <h3 className="acp-ttl"><Ic.Bell/> Pesanan Masuk</h3>
-
       {!selOrd ? (
-        // List pesanan
         <div className="acp-list">
-          {orders.length===0 && <p className="chat-empty">Belum ada pesanan</p>}
+          {orders.length===0 && <p className="chat-empty">Belum ada pesanan masuk</p>}
           {orders.map(o=>(
             <div key={o.id} className="acp-item" onClick={()=>setSelOrd(o)}>
-              <div className="acp-item-left">
+              <div style={{flex:1,minWidth:0}}>
                 <p className="acp-pname">{o.productName}</p>
                 <p className="acp-buyer">{o.buyerName} · {o.buyerPhone}</p>
-                <p className="acp-addr" title={o.address}>{o.address?.slice(0,60)}{o.address?.length>60?"…":""}</p>
+                <p className="acp-addr">{o.address?.slice(0,70)}{o.address?.length>70?"…":""}</p>
               </div>
-              <div className="acp-item-right">
+              <div style={{flexShrink:0,textAlign:"right"}}>
                 <p className="acp-price">{fRp(o.price)}</p>
-                <span className="acp-status" style={{color:STATUS_COLOR[o.status]||"#888"}}>
-                  {o.status||"pending"}
-                </span>
+                <span className="acp-status" style={{color:SC[o.status]||"#888"}}>{o.status||"pending"}</span>
               </div>
             </div>
           ))}
         </div>
       ) : (
-        // Detail + chat
         <div className="acp-detail">
-          <button className="btn-back" onClick={()=>setSelOrd(null)}>← Kembali</button>
+          <button type="button" className="btn-back" onClick={()=>setSelOrd(null)}>← Kembali</button>
           <div className="acp-order-info">
             <p><strong>{selOrd.productName}</strong> · {fRp(selOrd.price)}</p>
             <p>👤 {selOrd.buyerName} · 📱 {selOrd.buyerPhone}</p>
             <p>📍 {selOrd.address}</p>
-            {selOrd.note && <p>📝 {selOrd.note}</p>}
+            {selOrd.note&&<p>📝 {selOrd.note}</p>}
           </div>
           <div className="acp-status-row">
             {["pending","confirmed","shipped","done","cancelled"].map(s=>(
-              <button key={s} className={`btn-status${selOrd.status===s?" on":""}`}
-                onClick={()=>updateStatus(s)}>{s}</button>
+              <button key={s} type="button"
+                className={`btn-status${selOrd.status===s?" on":""}`}
+                onClick={()=>updStatus(s)}>{s}</button>
             ))}
           </div>
           <div className="chat-msgs" ref={chatRef} style={{height:200}}>
             {msgs.map(m=>(
-              <div key={m.id} className={`cmsg ${m.from==="admin"?"right":"left"}`}>
-                <div className="cbubble">{m.text}</div>
-                <span className="ctime">{m.from==="admin"?"Admin":"Pembeli"}</span>
+              <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
+                {m.from==="system"
+                  ? <div className="csys">{m.text}</div>
+                  : <>
+                      <div className="cbubble">{m.text}</div>
+                      <span className="ctime">{m.from==="admin"?"Admin":"Pembeli"}</span>
+                    </>
+                }
               </div>
             ))}
           </div>
@@ -413,7 +482,7 @@ function AdminChatPanel({onClose}) {
             <input className="finput" style={{flex:1}} placeholder="Balas pesan…"
               value={txt} onChange={e=>setTxt(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&send()}/>
-            <button className="btn-send" onClick={send}><Ic.Send/></button>
+            <button type="button" className="btn-send" onClick={send}><Ic.Send/></button>
           </div>
         </div>
       )}
@@ -421,7 +490,7 @@ function AdminChatPanel({onClose}) {
   );
 }
 
-// ─── Detail Modal ──────────────────────────────────────────────────────────
+// ─── Detail ────────────────────────────────────────────────────────────────
 function ProductDetail({p, onOrder}) {
   const [idx,setIdx] = useState(0);
   const imgs = Array.isArray(p.images)
@@ -429,7 +498,6 @@ function ProductDetail({p, onOrder}) {
     : (p.image?[p.image]:[]);
   const stok = getStock(p);
   const src  = imgs[idx]||IMG_PH;
-
   return (
     <div className="detail">
       <div className="d-img-wrap">
@@ -466,13 +534,11 @@ function ProductDetail({p, onOrder}) {
           <p className="d-sec-title">📋 Deskripsi</p>
           <p className="d-sec-text">{p.desc||p.description||"—"}</p>
         </div>
-        {/* Tombol pesan: disable jika stok 0 */}
-        <button
+        <button type="button"
           className={`btn-order${stok===0?" disabled":""}`}
           onClick={()=>stok>0&&onOrder(p)}
-          disabled={stok===0}
-        >
-          {stok===0 ? "🚫 Stok Habis" : "🛒 Pesan Sekarang"}
+          disabled={stok===0}>
+          {stok===0?"🚫 Stok Habis":"🛒 Pesan Sekarang"}
         </button>
       </div>
     </div>
@@ -483,10 +549,7 @@ function ProductDetail({p, onOrder}) {
 function AdminLogin({onLogin}) {
   const [pass,setPass]=useState(""), [err,setErr]=useState(false);
   const PASS = import.meta.env.VITE_ADMIN_PASSWORD||"admin123";
-  const go = ()=>{
-    if(pass===PASS) onLogin();
-    else{setErr(true);setTimeout(()=>setErr(false),1400);}
-  };
+  const go=()=>{ if(pass===PASS) onLogin(); else{setErr(true);setTimeout(()=>setErr(false),1400);} };
   return (
     <div className="alog">
       <div className="alog-ico"><Ic.Admin/></div>
@@ -496,8 +559,8 @@ function AdminLogin({onLogin}) {
         placeholder="Password…" value={pass}
         onChange={e=>setPass(e.target.value)}
         onKeyDown={e=>e.key==="Enter"&&go()}/>
-      {err && <p className="errmsg">Password salah!</p>}
-      <button className="btn-save" style={{width:"100%",marginTop:10}} onClick={go}>Masuk</button>
+      {err&&<p className="errmsg">Password salah!</p>}
+      <button type="button" className="btn-save" style={{width:"100%",marginTop:10}} onClick={go}>Masuk</button>
     </div>
   );
 }
@@ -505,12 +568,11 @@ function AdminLogin({onLogin}) {
 // ─── Product Form ──────────────────────────────────────────────────────────
 function ProductForm({initial,onSave,onCancel,saving}) {
   const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
-  const [f,setF]     = useState(initial?{...blank,...initial}:blank);
-  const [iu,setIU]   = useState("");
-  const [file,setFile]= useState(null);
-  const [prev,setPrev]= useState(getImg(initial||{}));
-  const [up,setUp]   = useState(false);
-
+  const [f,setF]=useState(initial?{...blank,...initial}:blank);
+  const [iu,setIU]=useState("");
+  const [file,setFile]=useState(null);
+  const [prev,setPrev]=useState(getImg(initial||{}));
+  const [up,setUp]=useState(false);
   const ch=(k,v)=>setF(x=>({...x,[k]:v}));
 
   const submit=async()=>{
@@ -543,7 +605,7 @@ function ProductForm({initial,onSave,onCancel,saving}) {
             <input className="finput" placeholder="atau paste URL…" value={iu}
               onChange={e=>setIU(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}/>
-            <button className="btn-addurl" onClick={()=>{if(iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}>+</button>
+            <button type="button" className="btn-addurl" onClick={()=>{if(iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}>+</button>
           </div>
         </div>
       </div>
@@ -554,7 +616,7 @@ function ProductForm({initial,onSave,onCancel,saving}) {
           <select className="finput" value={f.gender} onChange={e=>ch("gender",e.target.value)}>
             <option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="unisex">Unisex</option>
           </select></div>
-        <div className="fg"><label>Harga (Rp)*</label><input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
+        <div className="fg"><label>Harga (Rp) *</label><input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
         <div className="fg"><label>Stok</label><input type="number" className="finput" value={f.stock} onChange={e=>ch("stock",e.target.value)}/></div>
         <div className="fg"><label>Rating</label><input type="number" step="0.1" min="0" max="5" className="finput" value={f.rating} onChange={e=>ch("rating",e.target.value)}/></div>
         <div className="fg"><label>Terjual</label><input type="number" className="finput" value={f.sold} onChange={e=>ch("sold",e.target.value)}/></div>
@@ -569,8 +631,10 @@ function ProductForm({initial,onSave,onCancel,saving}) {
         <label className="chk"><input type="checkbox" checked={!!f.isActive}   onChange={e=>ch("isActive",e.target.checked)}/> Aktif/Tampil</label>
       </div>
       <div className="form-acts">
-        <button className="btn-cancel" onClick={onCancel}>Batal</button>
-        <button className="btn-save" onClick={submit} disabled={saving||up}>{up?"Uploading…":saving?"Menyimpan…":"Simpan"}</button>
+        <button type="button" className="btn-cancel" onClick={onCancel}>Batal</button>
+        <button type="button" className="btn-save" onClick={submit} disabled={saving||up}>
+          {up?"Uploading…":saving?"Menyimpan…":"Simpan"}
+        </button>
       </div>
     </div>
   );
@@ -582,8 +646,8 @@ function ConfirmDelete({p,onConfirm,onCancel,saving}) {
       <h3>Hapus Produk?</h3>
       <p>Yakin hapus <strong>{p.name}</strong>?<br/>Tidak bisa dibatalkan.</p>
       <div className="form-acts">
-        <button className="btn-cancel" onClick={onCancel}>Batal</button>
-        <button className="btn-del" onClick={onConfirm} disabled={saving}>{saving?"Menghapus…":"Ya, Hapus"}</button>
+        <button type="button" className="btn-cancel" onClick={onCancel}>Batal</button>
+        <button type="button" className="btn-del" onClick={onConfirm} disabled={saving}>{saving?"Menghapus…":"Ya, Hapus"}</button>
       </div>
     </div>
   );
@@ -591,22 +655,31 @@ function ConfirmDelete({p,onConfirm,onCancel,saving}) {
 
 // ─── MAIN APP ──────────────────────────────────────────────────────────────
 export default function App() {
-  const [products, setProducts] = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState("");
-  const [cat,      setCat]      = useState("All");
-  const [sort,     setSort]     = useState("newest");
-  const [selected, setSelected] = useState(null);
-  const [orderProd,setOrderProd]= useState(null);
-  const [editP,    setEditP]    = useState(null);
-  const [delP,     setDelP]     = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [isAdmin,  setIsAdmin]  = useState(false);
-  const [showLogin,setShowLogin]= useState(false);
-  const [showACP,  setShowACP]  = useState(false);
-  const [saving,   setSaving]   = useState(false);
-  const [dark,     setDark]     = useState(true);
-  const [notifCnt, setNotifCnt] = useState(0);
+  const [products,  setProducts]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [search,    setSearch]    = useState("");
+  const [cat,       setCat]       = useState("All");
+  const [sort,      setSort]      = useState("newest");
+  const [selected,  setSelected]  = useState(null);
+  const [orderProd, setOrderProd] = useState(null);
+  const [editP,     setEditP]     = useState(null);
+  const [delP,      setDelP]      = useState(null);
+  const [showForm,  setShowForm]  = useState(false);
+  const [isAdmin,   setIsAdmin]   = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showACP,   setShowACP]   = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [dark,      setDark]      = useState(true);
+  const [menuOpen,  setMenuOpen]  = useState(false);  // ← burger menu
+  const [notifCnt,  setNotifCnt]  = useState(0);
+  const menuRef = useRef(null);
+
+  // Tutup menu saat klik luar
+  useEffect(()=>{
+    const h=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("mousedown",h);
+    return ()=>document.removeEventListener("mousedown",h);
+  },[]);
 
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
@@ -617,28 +690,25 @@ export default function App() {
     return ()=>u();
   },[]);
 
-  // Notif badge untuk admin
+  // Notif badge
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"notifications"),where("read","==",false));
     return onSnapshot(q,s=>setNotifCnt(s.size));
   },[isAdmin]);
 
-  // ── Filter tabs: normalisasi male/man→Male, female/woman→Female ──
-  const genders = ["All","Male","Female","Unisex"];
+  const GENDERS = ["All","Male","Female","Unisex"];
 
-  // ── Cek apakah produk cocok dengan tab yang dipilih ──
-  const matchGender = (p,tab) => {
+  const matchGender=(p,tab)=>{
     if(tab==="All") return true;
-    const ng = normGender(p.gender||p.category||"");
-    return ng.toLowerCase()===tab.toLowerCase();
+    return normGender(p.gender||"").toLowerCase()===tab.toLowerCase();
   };
 
-  let list = products.filter(p=>{
+  let list=products.filter(p=>{
     if(!isAdmin&&p.isActive===false) return false;
-    const mCat = matchGender(p,cat);
+    if(!matchGender(p,cat)) return false;
     const q=search.toLowerCase();
-    return mCat&&(!q||(p.name||"").toLowerCase().includes(q)||(p.desc||"").toLowerCase().includes(q));
+    return !q||(p.name||"").toLowerCase().includes(q)||(p.desc||"").toLowerCase().includes(q);
   });
   if(sort==="price-asc")  list=[...list].sort((a,b)=>(a.price||0)-(b.price||0));
   if(sort==="price-desc") list=[...list].sort((a,b)=>(b.price||0)-(a.price||0));
@@ -655,6 +725,7 @@ export default function App() {
     }catch(e){alert("Gagal: "+e.message);}
     setSaving(false);
   };
+
   const handleDelete=async()=>{
     setSaving(true);
     try{await deleteDoc(doc(db,"products",delP.id));}
@@ -662,62 +733,100 @@ export default function App() {
     setDelP(null);setSaving(false);
   };
 
+  const closeMenu=()=>setMenuOpen(false);
+
   return (
     <>
       <style>{CSS}</style>
       <div className={`app ${dark?"dark":"light"}`}>
 
-        {/* ── HEADER ── */}
+        {/* ════ HEADER — stabil, tidak berubah lebar saat admin on/off ════ */}
         <header className="hdr">
           <div className="hinner">
+            {/* Logo */}
             <div className="logo">
               <span className="logo-dot"/>
               <span className="logo-txt">Katalog<em>Aparfume</em></span>
             </div>
+
+            {/* Kanan: mode toggle + burger menu */}
             <div className="hright">
-              <button className="mode-btn" onClick={()=>setDark(d=>!d)}>
+              <button type="button" className="icon-btn" onClick={()=>setDark(d=>!d)}
+                title={dark?"Mode Terang":"Mode Gelap"}>
                 {dark?<Ic.Sun/>:<Ic.Moon/>}
               </button>
-              {isAdmin?(
-                <>
-                  <button className="notif-btn" onClick={()=>setShowACP(true)}>
-                    <Ic.Bell/>
-                    {notifCnt>0&&<span className="notif-dot">{notifCnt}</span>}
-                  </button>
-                  <button className="btn-add" onClick={()=>{setEditP(null);setShowForm(true);}}>
-                    <Ic.Plus/> Tambah
-                  </button>
-                  <button className="admin-btn on" onClick={()=>setIsAdmin(false)}>Admin ✓</button>
-                </>
-              ):(
-                <button className="admin-btn" onClick={()=>setShowLogin(true)}><Ic.Admin/> Admin</button>
+
+              {/* Notif badge — hanya muncul kalau admin & ada notif */}
+              {isAdmin && (
+                <button type="button" className="icon-btn notif-btn" onClick={()=>{setShowACP(true);closeMenu();}}>
+                  <Ic.Bell/>
+                  {notifCnt>0 && <span className="notif-dot">{notifCnt}</span>}
+                </button>
               )}
+
+              {/* Burger menu — SELALU ada, tidak geser layout */}
+              <div className="burger-wrap" ref={menuRef}>
+                <button type="button" className="icon-btn" onClick={()=>setMenuOpen(o=>!o)}>
+                  <Ic.Menu/>
+                </button>
+
+                {menuOpen && (
+                  <div className="dropdown">
+                    {!isAdmin ? (
+                      /* Menu untuk user biasa */
+                      <button type="button" className="dd-item" onClick={()=>{setShowLogin(true);closeMenu();}}>
+                        <Ic.Admin/> Login Admin
+                      </button>
+                    ) : (
+                      /* Menu untuk admin */
+                      <>
+                        <div className="dd-label">Admin Panel</div>
+                        <button type="button" className="dd-item gold" onClick={()=>{setEditP(null);setShowForm(true);closeMenu();}}>
+                          <Ic.Plus/> Tambah Produk
+                        </button>
+                        <button type="button" className="dd-item" onClick={()=>{setShowACP(true);closeMenu();}}>
+                          <Ic.Chat/> Pesanan {notifCnt>0&&<span className="dd-badge">{notifCnt}</span>}
+                        </button>
+                        <div className="dd-info">
+                          <span>📦 {products.length} produk</span>
+                          <span>⚠ {products.filter(p=>getStock(p)<10).length} stok tipis</span>
+                          <span>🚫 {products.filter(p=>p.isActive===false).length} nonaktif</span>
+                        </div>
+                        <div className="dd-divider"/>
+                        <button type="button" className="dd-item red" onClick={()=>{setIsAdmin(false);closeMenu();}}>
+                          Keluar Admin
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
 
-        {/* ── HERO ── */}
+        {/* ════ HERO — ringkas, tanpa judul besar ════ */}
         <section className="hero">
           <div className="hero-glow"/>
           <p className="hero-eye">Koleksi Perfume</p>
-          <h1 className="hero-ttl">Temukan Parfum<br/><em>Terbaik Kami</em></h1>
           <p className="hero-sub">{list.length} produk tersedia</p>
         </section>
 
-        {/* ── GENDER TABS — ringkas: All / Male / Female / Unisex ── */}
+        {/* ════ GENDER TABS ════ */}
         <div className="cats">
-          {genders.map(g=>(
-            <button key={g} className={`cat-btn${cat===g?" on":""}`} onClick={()=>setCat(g)}>{g}</button>
+          {GENDERS.map(g=>(
+            <button key={g} type="button" className={`cat-btn${cat===g?" on":""}`}
+              onClick={()=>setCat(g)}>{g}</button>
           ))}
         </div>
 
-        {/* ── TOOLBAR ── */}
+        {/* ════ TOOLBAR ════ */}
         <div className="toolbar">
           <div className="sbox">
             <Ic.Search/>
             <input className="sinp" placeholder="Cari produk…" value={search}
               onChange={e=>setSearch(e.target.value)}/>
-            {search&&<button className="sclr" onClick={()=>setSearch("")}><Ic.Close/></button>}
+            {search&&<button type="button" className="sclr" onClick={()=>setSearch("")}><Ic.Close/></button>}
           </div>
           <select className="ssel" value={sort} onChange={e=>setSort(e.target.value)}>
             <option value="newest">Terbaru</option>
@@ -729,17 +838,7 @@ export default function App() {
           </select>
         </div>
 
-        {isAdmin&&(
-          <div className="abar">
-            <span>🛠 Admin</span>
-            <span>{products.length} produk</span>
-            <span>{products.filter(p=>p.isActive===false).length} nonaktif</span>
-            <span>{products.filter(p=>getStock(p)<10).length} stok tipis</span>
-            <button className="abar-chat" onClick={()=>setShowACP(true)}><Ic.Chat/> Pesanan {notifCnt>0&&`(${notifCnt})`}</button>
-          </div>
-        )}
-
-        {/* ── GRID 2 KOLOM ── */}
+        {/* ════ GRID ════ */}
         <main className="main">
           {loading?(
             <div className="grid2">{[...Array(6)].map((_,i)=><div key={i} className="skel"/>)}</div>
@@ -760,27 +859,27 @@ export default function App() {
           )}
         </main>
 
-        <footer className="ftr">© 2025 Katalog Parfum by PAREVIE</footer>
+        <footer className="ftr">© 2026 Katalog Aparfume — by: PAREVIE</footer>
 
-        {/* ── MODALS ── */}
-        <Modal open={!!selected} onClose={()=>setSelected(null)}>
+        {/* ════ MODALS ════ */}
+        <Modal open={!!selected}   onClose={()=>setSelected(null)}>
           {selected&&<ProductDetail p={selected} onOrder={p=>{setSelected(null);setOrderProd(p);}}/>}
         </Modal>
-        <Modal open={!!orderProd} onClose={()=>setOrderProd(null)}>
-          {orderProd&&<OrderModal p={orderProd} onClose={()=>setOrderProd(null)}/>}
+        <Modal open={!!orderProd}  onClose={()=>setOrderProd(null)}>
+          {orderProd&&<OrderModal p={orderProd}/>}
         </Modal>
-        <Modal open={showForm} onClose={()=>{setShowForm(false);setEditP(null);}}>
+        <Modal open={showForm}     onClose={()=>{setShowForm(false);setEditP(null);}}>
           <ProductForm initial={editP} onSave={handleSave} saving={saving}
             onCancel={()=>{setShowForm(false);setEditP(null);}}/>
         </Modal>
-        <Modal open={!!delP} onClose={()=>setDelP(null)}>
+        <Modal open={!!delP}       onClose={()=>setDelP(null)}>
           {delP&&<ConfirmDelete p={delP} onConfirm={handleDelete} onCancel={()=>setDelP(null)} saving={saving}/>}
         </Modal>
-        <Modal open={showLogin} onClose={()=>setShowLogin(false)}>
+        <Modal open={showLogin}    onClose={()=>setShowLogin(false)}>
           <AdminLogin onLogin={()=>{setIsAdmin(true);setShowLogin(false);}}/>
         </Modal>
-        <Modal open={showACP} onClose={()=>setShowACP(false)}>
-          <AdminChatPanel onClose={()=>setShowACP(false)}/>
+        <Modal open={showACP}      onClose={()=>setShowACP(false)}>
+          <AdminChatPanel/>
         </Modal>
       </div>
     </>
@@ -794,47 +893,54 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 
-.dark{--bg:#0d0d14;--bg2:#12121c;--bg3:#1e1e2c;--card:#16162288;--border:#ffffff13;--gold:#c9a84c;--gold2:#f0d080;--accent:#7c6af5;--red:#e05a5a;--green:#4caf82;--text:#f0ede8;--text2:#b0acbc;--text3:#62606c;--star-off:#333;--shd:0 8px 32px rgba(0,0,0,.55);--modal:#12121c;--hdr:rgba(13,13,20,.92);--hero-glow:radial-gradient(ellipse 80% 60% at 50% 0%,#c9a84c18 0%,transparent 70%)}
-.light{--bg:#f4f1eb;--bg2:#fff;--bg3:#e8e4da;--card:#ffffffd0;--border:#00000010;--gold:#9a6e18;--gold2:#c18a20;--accent:#5548cc;--red:#c03030;--green:#1e7a48;--text:#18160f;--text2:#48443c;--text3:#88847a;--star-off:#ccc;--shd:0 8px 28px rgba(0,0,0,.13);--modal:#fff;--hdr:rgba(244,241,235,.94);--hero-glow:radial-gradient(ellipse 80% 60% at 50% 0%,#c9a84c1a 0%,transparent 70%)}
+.dark{--bg:#0d0d14;--bg2:#12121c;--bg3:#1e1e2c;--card:#16162288;--border:#ffffff13;--gold:#c9a84c;--gold2:#f0d080;--accent:#7c6af5;--red:#e05a5a;--green:#4caf82;--text:#f0ede8;--text2:#b0acbc;--text3:#62606c;--star-off:#333;--shd:0 8px 32px rgba(0,0,0,.55);--modal:#12121c;--hdr:rgba(13,13,20,.95);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c14 0%,transparent 70%)}
+.light{--bg:#f4f1eb;--bg2:#fff;--bg3:#e8e4da;--card:#ffffffd0;--border:#00000010;--gold:#9a6e18;--gold2:#c18a20;--accent:#5548cc;--red:#c03030;--green:#1e7a48;--text:#18160f;--text2:#48443c;--text3:#88847a;--star-off:#ccc;--shd:0 8px 28px rgba(0,0,0,.13);--modal:#fff;--hdr:rgba(244,241,235,.96);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c18 0%,transparent 70%)}
 
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;transition:background .25s,color .25s}
-.app{display:flex;flex-direction:column;min-height:100vh;background:var(--bg);transition:background .25s}
+.app{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
 
-/* HEADER */
-.hdr{position:sticky;top:0;z-index:100;background:var(--hdr);backdrop-filter:blur(18px);border-bottom:1px solid var(--border)}
-.hinner{max-width:900px;margin:0 auto;padding:0 14px;height:56px;display:flex;align-items:center;justify-content:space-between;gap:8px}
-.logo{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.logo-dot{width:9px;height:9px;border-radius:50%;background:var(--gold);box-shadow:0 0 10px var(--gold)}
-.logo-txt{font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--text)}
+/* ── HEADER — tinggi tetap, tidak bergeser ── */
+.hdr{position:sticky;top:0;z-index:100;background:var(--hdr);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+.hinner{max-width:900px;margin:0 auto;padding:0 14px;height:52px;display:flex;align-items:center;justify-content:space-between}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-dot{width:8px;height:8px;border-radius:50%;background:var(--gold);box-shadow:0 0 8px var(--gold)}
+.logo-txt{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .logo-txt em{color:var(--gold);font-style:italic}
-.hright{display:flex;align-items:center;gap:6px;flex-shrink:0}
-.mode-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
-.mode-btn:hover{border-color:var(--gold);color:var(--gold)}
-.admin-btn{display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:18px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;white-space:nowrap}
-.admin-btn:hover{border-color:var(--gold);color:var(--gold)}
-.admin-btn.on{background:#c9a84c20;border-color:var(--gold);color:var(--gold)}
-.btn-add{display:flex;align-items:center;gap:4px;padding:6px 13px;border-radius:18px;border:none;background:var(--gold);color:#0d0d14;font-weight:700;font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;white-space:nowrap;flex-shrink:0}
-.btn-add:hover{background:var(--gold2)}
-.notif-btn{position:relative;width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
-.notif-btn:hover{border-color:var(--gold);color:var(--gold)}
-.notif-dot{position:absolute;top:-3px;right:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:.6rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid var(--bg)}
+.hright{display:flex;align-items:center;gap:5px}
 
-/* HERO */
-.hero{position:relative;overflow:hidden;padding:48px 16px 32px;text-align:center}
+/* Icon buttons — ukuran tetap */
+.icon-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;position:relative}
+.icon-btn:hover{border-color:var(--gold);color:var(--gold)}
+.notif-btn{position:relative}
+.notif-dot{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;border-radius:9px;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid var(--bg)}
+
+/* ── Burger dropdown ── */
+.burger-wrap{position:relative}
+.dropdown{position:absolute;top:calc(100% + 8px);right:0;min-width:200px;background:var(--modal);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shd);overflow:hidden;z-index:200;animation:fadedown .18s ease}
+@keyframes fadedown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.dd-label{padding:10px 14px 4px;font-size:.68rem;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);font-weight:600}
+.dd-item{width:100%;display:flex;align-items:center;gap:8px;padding:10px 14px;border:none;background:transparent;color:var(--text2);font-family:'DM Sans',sans-serif;font-size:.85rem;cursor:pointer;text-align:left;transition:background .15s}
+.dd-item:hover{background:var(--bg3)}
+.dd-item.gold{color:var(--gold);font-weight:600}
+.dd-item.red{color:var(--red)}
+.dd-badge{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.dd-info{padding:8px 14px;background:var(--bg3);font-size:.74rem;color:var(--text3);display:flex;flex-direction:column;gap:3px}
+.dd-divider{height:1px;background:var(--border);margin:2px 0}
+
+/* ── HERO — ringkas ── */
+.hero{position:relative;overflow:hidden;padding:20px 16px 14px;text-align:center}
 .hero-glow{position:absolute;inset:0;background:var(--hero-glow);pointer-events:none}
-.hero-eye{display:inline-block;padding:3px 14px;border:1px solid var(--gold);border-radius:18px;color:var(--gold);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:12px}
-.hero-ttl{font-family:'Playfair Display',serif;font-size:clamp(1.8rem,5vw,2.7rem);line-height:1.2;margin-bottom:8px;color:var(--text)}
-.hero-ttl em{color:var(--gold);font-style:italic}
-.hero-sub{color:var(--text3);font-size:.87rem}
+.hero-eye{display:inline-block;padding:3px 14px;border:1px solid var(--gold);border-radius:18px;color:var(--gold);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.hero-sub{color:var(--text3);font-size:.84rem;margin-top:2px}
 
-/* GENDER TABS */
-.cats{display:flex;gap:6px;padding:10px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%}
+/* ── GENDER TABS ── */
+.cats{display:flex;gap:6px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%}
 .cats::-webkit-scrollbar{display:none}
 .cat-btn{padding:6px 18px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;color:var(--text3);background:var(--bg3);white-space:nowrap;transition:all .2s;flex-shrink:0}
-.cat-btn:hover{color:var(--text2);border-color:var(--gold)}
+.cat-btn:hover{border-color:var(--gold);color:var(--text2)}
 .cat-btn.on{background:var(--gold);color:#0d0d14;font-weight:700;border-color:var(--gold)}
 
-/* TOOLBAR */
+/* ── TOOLBAR ── */
 .toolbar{max-width:900px;margin:0 auto;padding:6px 14px 10px;display:flex;gap:8px;align-items:center}
 .sbox{flex:1;display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;transition:border-color .2s}
 .sbox:focus-within{border-color:var(--gold)}
@@ -844,16 +950,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sclr{background:none;border:none;cursor:pointer;color:var(--text3);display:flex;padding:0}
 .ssel{padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.82rem;cursor:pointer;outline:none;flex-shrink:0}
 
-/* ADMIN BAR */
-.abar{max-width:900px;margin:0 auto 6px;padding:7px 14px;background:#c9a84c12;border:1px solid #c9a84c28;border-radius:10px;display:flex;gap:14px;flex-wrap:wrap;font-size:.75rem;color:var(--gold);align-items:center}
-.abar-chat{margin-left:auto;display:flex;align-items:center;gap:5px;padding:4px 12px;border-radius:14px;border:1px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer;font-size:.76rem;font-family:'DM Sans',sans-serif;transition:all .2s}
-.abar-chat:hover{background:var(--gold);color:#0d0d14}
-
-/* MAIN */
+/* ── MAIN ── */
 .main{flex:1;max-width:900px;margin:0 auto;padding:6px 12px 48px;width:100%}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 
-/* CARD */
+/* ── CARD ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s,border-color .2s;position:relative;backdrop-filter:blur(8px)}
 .card:hover{border-color:#c9a84c55;transform:translateY(-3px);box-shadow:var(--shd)}
 .card-img-wrap{position:relative;overflow:hidden;aspect-ratio:1/1}
@@ -869,9 +970,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .bdg-new{background:#7c6af5;color:#fff}
 .bdg-sale{background:#e05a5a;color:#fff}
 .bdg-eco{background:#4caf82;color:#fff}
-.bdg-inactive{position:absolute;bottom:7px;left:7px;padding:2px 8px;border-radius:5px;font-size:.62rem;font-weight:700;background:rgba(0,0,0,.65);color:#999;border:1px solid #ffffff18}
-/* Overlay stok habis */
-.sold-out-overlay{position:absolute;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;letter-spacing:.12em;color:#fff;backdrop-filter:blur(2px)}
+.bdg-inactive{position:absolute;bottom:7px;left:7px;padding:2px 8px;border-radius:5px;font-size:.62rem;font-weight:700;background:rgba(0,0,0,.65);color:#999;border:1px solid #fff2}
+.sold-out-overlay{position:absolute;inset:0;background:rgba(0,0,0,.58);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;letter-spacing:.12em;color:#fff;backdrop-filter:blur(2px)}
 .sold-out-overlay.lg{font-size:1.4rem}
 .card-body{padding:10px}
 .card-cat{display:flex;align-items:center;gap:4px;font-size:.67rem;color:var(--text3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:4px}
@@ -891,15 +991,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .empty p{color:var(--text3);font-size:.85rem}
 .ftr{text-align:center;padding:18px;border-top:1px solid var(--border);color:var(--text3);font-size:.76rem}
 
-/* MODAL */
+/* ── MODAL ── */
 .overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);display:flex;align-items:flex-end;justify-content:center}
-.modal-box{background:var(--modal);border:1px solid var(--border);border-radius:20px 20px 0 0;width:100%;max-width:900px;max-height:90vh;overflow-y:auto;position:relative;box-shadow:var(--shd);scrollbar-width:thin;scrollbar-color:var(--border) transparent;animation:slideup .28s ease}
+.modal-box{background:var(--modal);border:1px solid var(--border);border-radius:20px 20px 0 0;width:100%;max-width:900px;max-height:90vh;overflow-y:auto;position:relative;box-shadow:var(--shd);scrollbar-width:thin;scrollbar-color:var(--border) transparent;animation:slideup .25s ease}
 @keyframes slideup{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-handle{width:40px;height:4px;border-radius:2px;background:var(--border);margin:10px auto 0}
 .modal-close{position:absolute;top:10px;right:12px;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .2s}
 .modal-close:hover{border-color:var(--red);color:var(--red)}
 
-/* DETAIL */
+/* ── DETAIL ── */
 .detail{display:flex;flex-direction:column;width:100%}
 .d-img-wrap{width:100%;overflow:hidden;background:var(--bg3);line-height:0;position:relative}
 .d-img{width:100%;max-height:320px;object-fit:contain;display:block}
@@ -908,7 +1008,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .d-thumb{width:52px;height:52px;object-fit:cover;border-radius:8px;cursor:pointer;border:2px solid transparent;flex-shrink:0;transition:border-color .2s}
 .d-thumb.on,.d-thumb:hover{border-color:var(--gold)}
 .d-body{padding:16px}
-.d-name{font-family:'Playfair Display',serif;font-size:1.4rem;line-height:1.25;margin:6px 0 6px;color:var(--text)}
+.d-name{font-family:'Playfair Display',serif;font-size:1.4rem;line-height:1.25;margin:6px 0;color:var(--text)}
 .d-price{font-size:1.25rem;font-weight:700;color:var(--gold);margin:8px 0 10px}
 .d-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
 .d-section{margin-bottom:12px;padding:11px 13px;background:var(--bg3);border-radius:10px;border-left:3px solid var(--gold)}
@@ -918,58 +1018,63 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-order:hover:not(.disabled){background:var(--gold2)}
 .btn-order.disabled{background:var(--bg3);color:var(--text3);cursor:not-allowed;border:1px solid var(--border)}
 
-/* ORDER */
+/* ── ORDER ── */
 .ord-wrap{padding:16px}
-.ord-header{display:flex;gap:12px;align-items:center;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px}
+.ord-hdr{display:flex;gap:12px;align-items:center;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px}
 .ord-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0}
 .ord-pname{font-family:'Playfair Display',serif;font-size:1rem;color:var(--text);margin-bottom:4px}
 .ord-price{font-weight:700;color:var(--gold);font-size:.95rem}
 .ord-body{display:flex;flex-direction:column;gap:12px}
-.btn-loc{display:flex;align-items:center;gap:5px;padding:7px 12px;border-radius:8px;border:1px dashed var(--gold);background:transparent;color:var(--gold);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif;margin-top:4px;transition:all .2s;width:fit-content}
-.btn-loc:hover{background:#c9a84c18}
-.loc-msg{font-size:.75rem;color:var(--text3);margin-top:4px}
+/* GPS button */
+.btn-loc{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;border:1px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif;margin-top:6px;transition:all .2s;-webkit-tap-highlight-color:transparent}
+.btn-loc:hover,.btn-loc:active{background:#c9a84c18}
+.btn-loc.loading{opacity:.7;cursor:wait}
+.btn-loc.done{border-color:var(--green);color:var(--green);background:#4caf8210}
+.loc-msg{font-size:.75rem;margin-top:4px;padding:6px 8px;border-radius:6px;background:var(--bg3)}
+.loc-msg.ok{color:var(--green)}
+.loc-msg.err{color:var(--red)}
 .ord-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.8rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
 
-/* QRIS */
+/* ── QRIS ── */
 .qris-head{display:flex;align-items:center;gap:8px;padding:16px 16px 0;font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .qris-body{padding:16px;text-align:center}
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
-.qris-placeholder{width:200px;height:200px;margin:0 auto 16px;border:2px dashed var(--gold);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--gold);background:var(--bg3)}
-.qris-placeholder svg{width:48px;height:48px;opacity:.6}
-.qris-placeholder p{font-size:.8rem;color:var(--text3);text-align:center;padding:0 8px}
+.qris-placeholder{width:190px;height:190px;margin:0 auto 16px;border:2px dashed var(--gold);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--gold);background:var(--bg3)}
+.qris-placeholder svg{width:44px;height:44px;opacity:.6}
+.qris-placeholder p{font-size:.78rem;color:var(--text3);text-align:center;padding:0 8px}
 .qris-steps{text-align:left;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px;font-size:.82rem;color:var(--text2);line-height:2}
 
-/* CHAT */
+/* ── CHAT ── */
 .chat-wrap{display:flex;flex-direction:column;height:480px}
-.chat-hdr{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text)}
-.chat-status{margin-left:auto;font-size:.72rem;color:var(--green);font-weight:500}
-.chat-info{padding:8px 16px;background:var(--bg3);font-size:.76rem;color:var(--text3);border-bottom:1px solid var(--border)}
+.chat-hdr{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text);flex-shrink:0}
+.chat-status{margin-left:auto;font-size:.72rem;color:var(--green)}
+.chat-info{padding:7px 16px;background:var(--bg3);font-size:.74rem;color:var(--text3);border-bottom:1px solid var(--border);flex-shrink:0}
 .chat-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
-.chat-empty{text-align:center;color:var(--text3);font-size:.83rem;margin:auto}
+.chat-empty{text-align:center;color:var(--text3);font-size:.83rem;margin:auto;padding:20px}
 .cmsg{display:flex;flex-direction:column;gap:2px}
 .cmsg.right{align-items:flex-end}
 .cmsg.left{align-items:flex-start}
-.cbubble{max-width:75%;padding:9px 13px;border-radius:14px;font-size:.85rem;line-height:1.5;word-break:break-word}
+.cmsg.center{align-items:center}
+.cbubble{max-width:78%;padding:9px 13px;border-radius:14px;font-size:.84rem;line-height:1.5;word-break:break-word}
 .cmsg.right .cbubble{background:var(--gold);color:#0d0d14;border-radius:14px 14px 4px 14px}
 .cmsg.left  .cbubble{background:var(--bg3);color:var(--text);border-radius:14px 14px 14px 4px}
-.ctime{font-size:.65rem;color:var(--text3)}
-.chat-inp-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border)}
+.csys{font-size:.75rem;color:var(--text3);background:var(--bg3);padding:6px 12px;border-radius:10px;text-align:center;max-width:85%}
+.ctime{font-size:.64rem;color:var(--text3)}
+.chat-inp-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
 .btn-send{width:40px;height:40px;border-radius:10px;border:none;background:var(--gold);color:#0d0d14;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
 .btn-send:hover{background:var(--gold2)}
 
-/* ADMIN CHAT PANEL */
-.acp{padding:16px;min-height:420px}
+/* ── ADMIN PANEL ── */
+.acp{padding:16px;min-height:380px}
 .acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:14px;display:flex;align-items:center;gap:7px;color:var(--text)}
 .acp-list{display:flex;flex-direction:column;gap:8px}
 .acp-item{display:flex;justify-content:space-between;gap:10px;padding:12px;background:var(--bg3);border-radius:10px;cursor:pointer;border:1px solid var(--border);transition:border-color .2s}
 .acp-item:hover{border-color:var(--gold)}
-.acp-item-left{flex:1;min-width:0}
 .acp-pname{font-weight:600;font-size:.88rem;color:var(--text);margin-bottom:2px}
 .acp-buyer{font-size:.78rem;color:var(--text2);margin-bottom:2px}
-.acp-addr{font-size:.73rem;color:var(--text3)}
-.acp-item-right{flex-shrink:0;text-align:right}
+.acp-addr{font-size:.72rem;color:var(--text3)}
 .acp-price{font-weight:700;color:var(--gold);font-size:.85rem;margin-bottom:4px}
-.acp-status{font-size:.72rem;font-weight:600;text-transform:uppercase}
+.acp-status{font-size:.7rem;font-weight:700;text-transform:uppercase}
 .acp-detail{display:flex;flex-direction:column;gap:10px}
 .btn-back{align-self:flex-start;padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-back:hover{background:var(--bg3)}
@@ -979,7 +1084,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-status:hover{border-color:var(--gold);color:var(--gold)}
 .btn-status.on{background:var(--gold);border-color:var(--gold);color:#0d0d14;font-weight:700}
 
-/* FORM */
+/* ── FORM ── */
 .pform{padding:18px}
 .pform-ttl{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:14px;color:var(--text)}
 .pform-imgs{display:flex;gap:10px;margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:10px;flex-wrap:wrap}
@@ -997,7 +1102,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .finput:focus{border-color:var(--gold)}
 .finput.err{border-color:var(--red);animation:shake .3s}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-.ftarea{resize:vertical;min-height:90px}
+.ftarea{resize:vertical;min-height:80px}
 .pform-checks{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
 .chk{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text2);cursor:pointer}
 .form-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
@@ -1006,7 +1111,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-save{padding:9px 20px;border-radius:8px;border:none;background:var(--gold);color:#0d0d14;font-weight:700;font-size:.84rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-save:hover:not(:disabled){background:var(--gold2)}
 .btn-save:disabled,.btn-del:disabled{opacity:.5;cursor:not-allowed}
-.btn-del{padding:9px 20px;border-radius:8px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:.84rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
+.btn-del{padding:9px 20px;border-radius:8px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:.84rem;cursor:pointer;font-family:'DM Sans',sans-serif}
 .alog{padding:28px 20px;text-align:center}
 .alog-ico{width:46px;height:46px;border-radius:12px;background:#c9a84c18;border:1px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
 .alog h3{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:6px;color:var(--text)}
@@ -1015,5 +1120,5 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cbox{padding:26px 20px;text-align:center}
 .cbox h3{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:10px;color:var(--text)}
 .cbox p{color:var(--text2);margin-bottom:20px;font-size:.85rem;line-height:1.6}
-@media(max-width:400px){.grid2{gap:7px}.card-name{font-size:.84rem}.pform-grid{grid-template-columns:1fr}.hright{gap:4px}.btn-add{padding:5px 9px;font-size:.73rem}}
+@media(max-width:400px){.grid2{gap:7px}.pform-grid{grid-template-columns:1fr}}
 `;
