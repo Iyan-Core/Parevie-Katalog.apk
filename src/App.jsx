@@ -156,36 +156,55 @@ function OrderModal({p}) {
   const [submitting,setSub]    = useState(false);
   const chatRef = useRef(null);
 
-  // ── GPS: gunakan promise agar tidak ada masalah callback ──
+  // ── GPS: kompatibel Android WebView + Capacitor ──
   const getLocation = () => {
-    if (!navigator.geolocation) {
-      setLocState("error");
-      setGpsText("GPS tidak tersedia di perangkat ini");
-      return;
-    }
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
+
+    // Cek ketersediaan geolocation API
+    if (!navigator.geolocation) {
+      setLocState("error");
+      setGpsText("GPS tidak tersedia. Pastikan izin lokasi diaktifkan di Pengaturan Aplikasi.");
+      return;
+    }
+
+    // Timeout manual — Android WebView kadang tidak trigger callback error
+    const timeoutId = setTimeout(() => {
+      setLocState("error");
+      setGpsText("Timeout. Pastikan GPS aktif dan izin lokasi diberikan di Pengaturan → Aplikasi → Katalog Aparfume → Izin → Lokasi.");
+    }, 15000);
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        clearTimeout(timeoutId);
         const la = pos.coords.latitude.toFixed(6);
         const lo = pos.coords.longitude.toFixed(6);
         const mapsUrl = `https://maps.google.com/?q=${la},${lo}`;
         setGpsText(`📍 ${la}, ${lo}`);
         setLocState("done");
-        // Append ke alamat
         setAddr(prev => {
-          const tag = `\nGPS: ${mapsUrl}`;
-          return prev.includes("GPS:") ? prev : prev + tag;
+          if (prev.includes("GPS:")) return prev;
+          return (prev.trim() ? prev + "\n" : "") + `GPS: ${mapsUrl}`;
         });
       },
       (err) => {
+        clearTimeout(timeoutId);
         setLocState("error");
-        const msg = err.code===1
-          ? "Izin lokasi ditolak. Buka Pengaturan → Izin → Lokasi."
-          : "Gagal mengambil lokasi. Coba lagi.";
+        let msg = "Gagal mengambil lokasi.";
+        if (err.code === 1) {
+          msg = "Izin lokasi DITOLAK.\n👉 Buka: Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan";
+        } else if (err.code === 2) {
+          msg = "GPS tidak dapat ditemukan. Pastikan GPS aktif dan Anda berada di area dengan sinyal.";
+        } else if (err.code === 3) {
+          msg = "Timeout. GPS lambat merespons. Coba lagi di area terbuka.";
+        }
         setGpsText(msg);
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      }
     );
   };
 
@@ -746,7 +765,7 @@ export default function App() {
             {/* Logo */}
             <div className="logo">
               <span className="logo-dot"/>
-              <span className="logo-txt">Katalog<em>Aparfume</em></span>
+              <span className="logo-txt">Katalog<em>Pro</em></span>
             </div>
 
             {/* Kanan: mode toggle + burger menu */}
@@ -859,7 +878,7 @@ export default function App() {
           )}
         </main>
 
-        <footer className="ftr">© 2026 Katalog Aparfume — by: PAREVIE</footer>
+        <footer className="ftr">© 2025 Katalog Aparfume — By PAREVIE</footer>
 
         {/* ════ MODALS ════ */}
         <Modal open={!!selected}   onClose={()=>setSelected(null)}>
