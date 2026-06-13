@@ -348,11 +348,12 @@ function OrderModal({p}) {
           Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
         </p>
         <div className="qris-placeholder">
-          <Ic.Qris/>
-          <p>Scan QRIS di sini</p>
-          <p style={{fontSize:".72rem",marginTop:4,color:"var(--text3)"}}>
-            Ganti dengan gambar QRIS toko Anda
-          </p>
+  <img 
+    src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png" 
+    alt="QRIS" 
+    style={{width:"100%", height:"100%", objectFit:"contain", borderRadius:8}} 
+  />
+  <p style={{fontSize:".7rem", marginTop:6, color:"var(--gold)"}}>Scan QRIS di atas</p>
         </div>
         <div className="qris-steps">
           <p>1. Buka e-wallet / m-banking</p>
