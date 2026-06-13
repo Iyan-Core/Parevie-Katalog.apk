@@ -148,7 +148,7 @@ function OrderModal({p}) {
   const [phone,    setPhone]   = useState("");
   const [addr,     setAddr]    = useState("");
   const [note,     setNote]    = useState("");
-  const [locState, setLocState]= useState("idle");
+  const [locState, setLocState]= useState("idle"); // idle | loading | done | error
   const [gpsText,  setGpsText] = useState("");
   const [orderId,  setOId]     = useState(null);
   const [msgs,     setMsgs]    = useState([]);
@@ -161,12 +161,14 @@ function OrderModal({p}) {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
 
+    // Cek ketersediaan geolocation API
     if (!navigator.geolocation) {
       setLocState("error");
       setGpsText("GPS tidak tersedia. Pastikan izin lokasi diaktifkan di Pengaturan Aplikasi.");
       return;
     }
 
+    // Timeout manual — Android WebView kadang tidak trigger callback error
     const timeoutId = setTimeout(() => {
       setLocState("error");
       setGpsText("Timeout. Pastikan GPS aktif dan izin lokasi diberikan di Pengaturan → Aplikasi → Katalog Aparfume → Izin → Lokasi.");
@@ -213,6 +215,7 @@ function OrderModal({p}) {
     if (!addr.trim())  return alert("Alamat pengiriman wajib diisi!");
     setSub(true);
     try {
+      // 1. Simpan pesanan
       const oRef = await addDoc(collection(db,"orders"), {
         productId:   p.id,
         productName: p.name,
@@ -227,6 +230,7 @@ function OrderModal({p}) {
       });
       setOId(oRef.id);
 
+      // 2. Kirim notifikasi ke admin
       await addDoc(collection(db,"notifications"), {
         type:      "new_order",
         orderId:   oRef.id,
@@ -237,6 +241,7 @@ function OrderModal({p}) {
         createdAt: serverTimestamp(),
       });
 
+      // 3. Pesan otomatis di chat
       await addDoc(collection(db,`orders/${oRef.id}/chats`), {
         from:      "system",
         text:      `Pesanan diterima! Silakan tunggu konfirmasi admin. Produk: ${p.name} — ${fRp(p.price)}`,
@@ -250,6 +255,7 @@ function OrderModal({p}) {
     setSub(false);
   };
 
+  // ── Konfirmasi sudah bayar ──
   const confirmPay = async () => {
     if (!orderId) return;
     await updateDoc(doc(db,"orders",orderId), { status:"paid_pending_confirm" });
@@ -261,6 +267,7 @@ function OrderModal({p}) {
     setStep("chat");
   };
 
+  // ── Chat realtime ──
   useEffect(()=>{
     if (step!=="chat"||!orderId) return;
     const q = query(collection(db,`orders/${orderId}/chats`), orderBy("createdAt","asc"));
@@ -279,6 +286,7 @@ function OrderModal({p}) {
     setChatTxt("");
   };
 
+  // ── STEP: form ──
   if (step==="form") return (
     <div className="ord-wrap">
       <div className="ord-hdr">
@@ -303,6 +311,7 @@ function OrderModal({p}) {
           <textarea className="finput ftarea" rows={3} value={addr}
             onChange={e=>setAddr(e.target.value)}
             placeholder="Jalan, RT/RW, Kelurahan, Kota, Kode Pos…"/>
+          {/* Tombol GPS — pastikan onclick berjalan */}
           <button
             type="button"
             className={`btn-loc${locState==="loading"?" loading":locState==="done"?" done":""}`}
@@ -339,6 +348,7 @@ function OrderModal({p}) {
     </div>
   );
 
+  // ── STEP: qris ──
   if (step==="qris") return (
     <div className="ord-wrap">
       <div className="qris-head"><Ic.Qris/> <span>Pembayaran QRIS</span></div>
@@ -347,24 +357,14 @@ function OrderModal({p}) {
         <p style={{color:"var(--text3)",fontSize:".82rem",marginBottom:16}}>
           Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
         </p>
-        <div className="qris-placeholder">
-  <img
-    src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png"
-    alt="QRIS Parevie"
-    className="qris-image"
-  />
-  <p>Scan QRIS di sini</p>
-
-  <p
-    style={{
-      fontSize: ".72rem",
-      marginTop: 4,
-      color: "var(--text3)"
-    }}
-  >
-    Pembayaran QRIS Parevie
-  </p>
-</div>
+        <div className="qris-img-wrap">
+          <img
+            src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png"
+            alt="QRIS Parevie"
+            className="qris-img"
+            onError={(e)=>{e.target.onerror=null;e.target.style.display='none';}}
+          />
+        </div>
         <div className="qris-steps">
           <p>1. Buka e-wallet / m-banking</p>
           <p>2. Scan kode QR di atas</p>
@@ -378,6 +378,7 @@ function OrderModal({p}) {
     </div>
   );
 
+  // ── STEP: chat ──
   return (
     <div className="chat-wrap">
       <div className="chat-hdr">
@@ -509,7 +510,7 @@ function AdminChatPanel() {
   );
 }
 
-// ─── Product Detail ────────────────────────────────────────────────────────
+// ─── Detail ────────────────────────────────────────────────────────────────
 function ProductDetail({p, onOrder}) {
   const [idx,setIdx] = useState(0);
   const imgs = Array.isArray(p.images)
@@ -689,7 +690,7 @@ export default function App() {
   const [showACP,   setShowACP]   = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [dark,      setDark]      = useState(true);
-  const [menuOpen,  setMenuOpen]  = useState(false);
+  const [menuOpen,  setMenuOpen]  = useState(false);  // ← burger menu
   const [notifCnt,  setNotifCnt]  = useState(0);
   const menuRef = useRef(null);
 
@@ -878,7 +879,7 @@ export default function App() {
           )}
         </main>
 
-        <footer className="ftr">© 2025 Katalog Aparfume — By PAREVIE</footer>
+        <footer className="ftr">© 2026 Katalog Aparfume — By Mj-core</footer>
 
         {/* ════ MODALS ════ */}
         <Modal open={!!selected}   onClose={()=>setSelected(null)}>
@@ -1058,9 +1059,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .qris-head{display:flex;align-items:center;gap:8px;padding:16px 16px 0;font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .qris-body{padding:16px;text-align:center}
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
-.qris-placeholder{width:190px;height:190px;margin:0 auto 16px;border:2px dashed var(--gold);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--gold);background:var(--bg3)}
-.qris-placeholder svg{width:44px;height:44px;opacity:.6}
-.qris-placeholder p{font-size:.78rem;color:var(--text3);text-align:center;padding:0 8px}
+.qris-img-wrap{width:220px;height:220px;margin:0 auto 16px;border-radius:14px;overflow:hidden;border:2px solid var(--gold);background:var(--bg3);display:flex;align-items:center;justify-content:center}
+.qris-img{width:100%;height:100%;object-fit:contain}
 .qris-steps{text-align:left;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px;font-size:.82rem;color:var(--text2);line-height:2}
 
 /* ── CHAT ── */
