@@ -171,7 +171,7 @@ function OrderModal({p}) {
     // Timeout manual — Android WebView kadang tidak trigger callback error
     const timeoutId = setTimeout(() => {
       setLocState("error");
-      setGpsText("Timeout. Pastikan GPS aktif dan izin lokasi diberikan di Pengaturan → Aplikasi → Katalog Aparfume → Izin → Lokasi.");
+      setGpsText("Timeout. Pastikan GPS aktif dan izin lokasi diberikan di Pengaturan → Aplikasi → KatalogParfum → Izin → Lokasi.");
     }, 15000);
 
     navigator.geolocation.getCurrentPosition(
@@ -192,7 +192,7 @@ function OrderModal({p}) {
         setLocState("error");
         let msg = "Gagal mengambil lokasi.";
         if (err.code === 1) {
-          msg = "Izin lokasi DITOLAK.\n👉 Buka: Pengaturan → Aplikasi → Katalog Aparfume → Izin → Lokasi → Izinkan";
+          msg = "Izin lokasi DITOLAK.\n👉 Buka: Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan";
         } else if (err.code === 2) {
           msg = "GPS tidak dapat ditemukan. Pastikan GPS aktif dan Anda berada di area dengan sinyal.";
         } else if (err.code === 3) {
@@ -229,6 +229,8 @@ function OrderModal({p}) {
         createdAt:   serverTimestamp(),
       });
       setOId(oRef.id);
+      // Simpan ke in-memory store agar user bisa buka chat kapan saja
+      saveMyOrder(oRef.id, p.name, getImg(p), p.price);
 
       // 2. Kirim notifikasi ke admin
       await addDoc(collection(db,"notifications"), {
@@ -256,15 +258,36 @@ function OrderModal({p}) {
   };
 
   // ── Konfirmasi sudah bayar ──
+  const [paying, setPaying] = useState(false);
   const confirmPay = async () => {
-    if (!orderId) return;
-    await updateDoc(doc(db,"orders",orderId), { status:"paid_pending_confirm" });
-    await addDoc(collection(db,`orders/${orderId}/chats`), {
-      from:"buyer",
-      text:`Halo Admin! Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
-      createdAt: serverTimestamp(),
-    });
-    setStep("chat");
+    if (!orderId) {
+      alert("ID pesanan tidak ditemukan. Silakan buat pesanan ulang.");
+      return;
+    }
+    setPaying(true);
+    try {
+      await updateDoc(doc(db,"orders",orderId), {
+        status: "paid_pending_confirm",
+        paidAt: serverTimestamp(),
+      });
+      await addDoc(collection(db,`orders/${orderId}/chats`), {
+        from: "buyer",
+        text: `✅ Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
+        createdAt: serverTimestamp(),
+      });
+      // Notif ke admin
+      await addDoc(collection(db,"notifications"), {
+        type:    "payment_received",
+        orderId: orderId,
+        message: `💰 Pembayaran masuk: ${p.name} — ${fRp(p.price)}`,
+        read:    false,
+        createdAt: serverTimestamp(),
+      });
+      setStep("chat");
+    } catch(e) {
+      alert("Gagal konfirmasi: " + e.message + "\n\nPastikan koneksi internet aktif dan coba lagi.");
+    }
+    setPaying(false);
   };
 
   // ── Chat realtime ──
@@ -357,22 +380,37 @@ function OrderModal({p}) {
         <p style={{color:"var(--text3)",fontSize:".82rem",marginBottom:16}}>
           Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
         </p>
+        {/* 
+          ⚠️ PENTING: Gunakan gambar QRIS ASLI dari bank/dompet digital
+          JANGAN edit gambar QRIS (tambah logo, crop, filter, dll)
+          karena akan merusak checksum CRC-16 dan QR menjadi tidak valid.
+          
+          Cara mendapatkan QRIS asli:
+          - GoPay/Gojek: Aplikasi GoPay → Terima Pembayaran → Download QR
+          - DANA: Aplikasi DANA → QR Saya → Download
+          - BCA/BRI/Mandiri: Dashboard merchant → Download QRIS
+          
+          Upload gambar QRIS asli ke Firebase Storage atau ImageKit,
+          lalu ganti URL di bawah ini:
+        */}
         <div className="qris-img-wrap">
           <img
-            src="https://ik.imagekit.io/bn7fafwae/logo/qrismerchant.png"
+            src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png?updatedAt=1781320550809"
             alt="QRIS Parevie"
             className="qris-img"
             onError={(e)=>{e.target.onerror=null;e.target.style.display='none';}}
           />
         </div>
+        <p className="qris-note">⚠️ Gunakan QRIS asli tanpa editan agar bisa di-scan</p>
         <div className="qris-steps">
           <p>1. Buka e-wallet / m-banking</p>
           <p>2. Scan kode QR di atas</p>
           <p>3. Bayar tepat <strong>{fRp(p.price)}</strong></p>
           <p>4. Klik tombol di bawah setelah transfer</p>
         </div>
-        <button type="button" className="btn-order" onClick={confirmPay}>
-          ✅ Sudah Bayar → Chat Admin
+        <button type="button" className={`btn-order${paying?" disabled":""}`}
+          onClick={confirmPay} disabled={paying}>
+          {paying ? "⏳ Memproses…" : "✅ Sudah Bayar → Chat Admin"}
         </button>
       </div>
     </div>
@@ -435,16 +473,20 @@ function AdminChatPanel() {
 
   const send = async () => {
     if (!txt.trim()||!selOrd) return;
-    await addDoc(collection(db,`orders/${selOrd.id}/chats`),{
-      from:"admin", text:txt.trim(), createdAt:serverTimestamp(),
-    });
-    setTxt("");
+    try {
+      await addDoc(collection(db,`orders/${selOrd.id}/chats`), {
+        from:"admin", text:txt.trim(), createdAt:serverTimestamp(),
+      });
+      setTxt("");
+    } catch(e) { alert("Gagal kirim: "+e.message); }
   };
 
   const updStatus = async (s) => {
     if (!selOrd) return;
-    await updateDoc(doc(db,"orders",selOrd.id),{status:s});
-    setSelOrd(o=>({...o,status:s}));
+    try {
+      await updateDoc(doc(db,"orders",selOrd.id), { status:s, updatedAt:serverTimestamp() });
+      setSelOrd(o=>({...o,status:s}));
+    } catch(e) { alert("Gagal update status: "+e.message); }
   };
 
   const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
@@ -673,7 +715,138 @@ function ConfirmDelete({p,onConfirm,onCancel,saving}) {
   );
 }
 
-// ─── MAIN APP ──────────────────────────────────────────────────────────────
+// ─── Simpan riwayat pesanan user (in-memory, bertahan selama app terbuka) ─
+// Key: orderId, Value: { orderId, productName, productImg, price, step }
+const userOrdersStore = { orders: [] };
+
+const saveMyOrder = (orderId, productName, productImg, price) => {
+  const exists = userOrdersStore.orders.find(o => o.orderId === orderId);
+  if (!exists) {
+    userOrdersStore.orders.unshift({ orderId, productName, productImg, price, savedAt: Date.now() });
+  }
+};
+
+// ─── USER CHAT — lihat riwayat & buka chat pesanan lama ──────────────────
+function UserChatPanel({ onClose }) {
+  const [selOrd, setSelOrd] = useState(null);
+  const [msgs,   setMsgs]   = useState([]);
+  const [txt,    setTxt]    = useState("");
+  const [ordData,setOrdData]= useState(null);
+  const chatRef = useRef(null);
+  const myOrders = userOrdersStore.orders;
+
+  // Load detail order yang dipilih
+  useEffect(()=>{
+    if (!selOrd) return;
+    // Listen chat
+    const q = query(collection(db,`orders/${selOrd}/chats`), orderBy("createdAt","asc"));
+    const unsub = onSnapshot(q, snap=>{
+      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
+      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
+    });
+    // Listen status pesanan
+    const unsub2 = onSnapshot(doc(db,"orders",selOrd), snap=>{
+      if (snap.exists()) setOrdData(snap.data());
+    });
+    return ()=>{ unsub(); unsub2(); };
+  },[selOrd]);
+
+  const sendChat = async () => {
+    if (!txt.trim()||!selOrd) return;
+    try {
+      await addDoc(collection(db,`orders/${selOrd}/chats`),{
+        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
+      });
+      setTxt("");
+    } catch(e){ alert("Gagal kirim: "+e.message); }
+  };
+
+  const STATUS_LABEL = {
+    pending:              "⏳ Menunggu konfirmasi admin",
+    paid_pending_confirm: "💰 Pembayaran menunggu verifikasi",
+    confirmed:            "✅ Pesanan dikonfirmasi",
+    shipped:              "🚚 Dalam pengiriman",
+    done:                 "🎉 Pesanan selesai",
+    cancelled:            "❌ Pesanan dibatalkan",
+  };
+  const STATUS_COLOR = {
+    pending:"#c9a84c", paid_pending_confirm:"#7c6af5",
+    confirmed:"#4caf82", shipped:"#29b6f6", done:"#4caf82", cancelled:"#e05a5a"
+  };
+
+  if (myOrders.length === 0) {
+    return (
+      <div className="acp">
+        <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+        <div className="empty" style={{padding:"40px 16px"}}>
+          <p style={{fontSize:"2rem"}}>🛒</p>
+          <h3>Belum ada pesanan</h3>
+          <p>Pesanan akan muncul di sini setelah kamu checkout</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!selOrd) {
+    return (
+      <div className="acp">
+        <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+        <div className="acp-list">
+          {myOrders.map(o=>(
+            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
+              <img src={o.productImg||IMG_PH} alt={o.productName}
+                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
+                onError={e=>{e.target.src=IMG_PH;}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <p className="acp-pname">{o.productName}</p>
+                <p className="acp-buyer">{fRp(o.price)}</p>
+                <p className="acp-addr">#{o.orderId.slice(-6).toUpperCase()}</p>
+              </div>
+              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const found = myOrders.find(o=>o.orderId===selOrd);
+  const status = ordData?.status || "pending";
+
+  return (
+    <div className="chat-wrap">
+      <div className="chat-hdr">
+        <button type="button" onClick={()=>setSelOrd(null)}
+          style={{background:"none",border:"none",color:"var(--gold)",cursor:"pointer",marginRight:4,fontSize:"1rem"}}>←</button>
+        <Ic.Chat/> <span>{found?.productName}</span>
+      </div>
+      {/* Status bar */}
+      <div className="chat-info" style={{color:STATUS_COLOR[status]||"#888",fontWeight:600}}>
+        {STATUS_LABEL[status]||status}
+      </div>
+      <div className="chat-msgs" ref={chatRef}>
+        {msgs.length===0&&<p className="chat-empty">Belum ada pesan</p>}
+        {msgs.map(m=>(
+          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
+            {m.from==="system"
+              ? <div className="csys">{m.text}</div>
+              : <>
+                  <div className="cbubble">{m.text}</div>
+                  <span className="ctime">{m.from==="buyer"?"Saya":"Admin"}</span>
+                </>
+            }
+          </div>
+        ))}
+      </div>
+      <div className="chat-inp-row">
+        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e=>setTxt(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
+      </div>
+    </div>
+  );
+}
 export default function App() {
   const [products,  setProducts]  = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -690,8 +863,9 @@ export default function App() {
   const [showACP,   setShowACP]   = useState(false);
   const [saving,    setSaving]    = useState(false);
   const [dark,      setDark]      = useState(true);
-  const [menuOpen,  setMenuOpen]  = useState(false);  // ← burger menu
+  const [menuOpen,  setMenuOpen]  = useState(false);
   const [notifCnt,  setNotifCnt]  = useState(0);
+  const [showMyOrders, setShowMyOrders] = useState(false); // ← riwayat pesanan user
   const menuRef = useRef(null);
 
   // Tutup menu saat klik luar
@@ -739,17 +913,23 @@ export default function App() {
   const handleSave=async(data)=>{
     setSaving(true);
     try{
-      if(editP?.id){const{id,...r}=data;await updateDoc(doc(db,"products",editP.id),{...r,updatedAt:serverTimestamp()});}
-      else{await addDoc(collection(db,"products"),{...data,createdAt:serverTimestamp()});}
+      if(editP?.id){
+        const{id,...r}=data;
+        await updateDoc(doc(db,"products",editP.id),{...r,updatedAt:serverTimestamp()});
+      } else {
+        await addDoc(collection(db,"products"),{...data,createdAt:serverTimestamp()});
+      }
       setShowForm(false);setEditP(null);
-    }catch(e){alert("Gagal: "+e.message);}
+    }catch(e){alert("Gagal simpan produk: "+e.message);}
     setSaving(false);
   };
 
   const handleDelete=async()=>{
     setSaving(true);
-    try{await deleteDoc(doc(db,"products",delP.id));}
-    catch(e){alert("Gagal: "+e.message);}
+    try{
+      await deleteDoc(doc(db,"products",delP.id));
+    }
+    catch(e){alert("Gagal hapus: "+e.message);}
     setDelP(null);setSaving(false);
   };
 
@@ -776,6 +956,16 @@ export default function App() {
                 {dark?<Ic.Sun/>:<Ic.Moon/>}
               </button>
 
+              {/* Tombol pesanan saya — selalu ada untuk user */}
+              {!isAdmin && (
+                <button type="button" className="icon-btn"
+                  onClick={()=>setShowMyOrders(true)}
+                  title="Pesanan & Chat Saya">
+                  <Ic.Chat/>
+                  {userOrdersStore.orders.length>0 &&
+                    <span className="notif-dot">{userOrdersStore.orders.length}</span>}
+                </button>
+              )}
               {/* Notif badge — hanya muncul kalau admin & ada notif */}
               {isAdmin && (
                 <button type="button" className="icon-btn notif-btn" onClick={()=>{setShowACP(true);closeMenu();}}>
@@ -828,7 +1018,7 @@ export default function App() {
         {/* ════ HERO — ringkas, tanpa judul besar ════ */}
         <section className="hero">
           <div className="hero-glow"/>
-          <p className="hero-eye">Koleksi Perfume</p>
+          <p className="hero-eye">Koleksi Parfum</p>
           <p className="hero-sub">{list.length} produk tersedia</p>
         </section>
 
@@ -879,7 +1069,7 @@ export default function App() {
           )}
         </main>
 
-        <footer className="ftr">© 2026 Katalog Aparfume — By Mj-core</footer>
+        <footer className="ftr">© 2026 Katalog Parfum — By:Parevie</footer>
 
         {/* ════ MODALS ════ */}
         <Modal open={!!selected}   onClose={()=>setSelected(null)}>
@@ -897,6 +1087,9 @@ export default function App() {
         </Modal>
         <Modal open={showLogin}    onClose={()=>setShowLogin(false)}>
           <AdminLogin onLogin={()=>{setIsAdmin(true);setShowLogin(false);}}/>
+        </Modal>
+        <Modal open={showMyOrders} onClose={()=>setShowMyOrders(false)}>
+          <UserChatPanel onClose={()=>setShowMyOrders(false)}/>
         </Modal>
         <Modal open={showACP}      onClose={()=>setShowACP(false)}>
           <AdminChatPanel/>
@@ -1061,6 +1254,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
 .qris-img-wrap{width:220px;height:220px;margin:0 auto 16px;border-radius:14px;overflow:hidden;border:2px solid var(--gold);background:var(--bg3);display:flex;align-items:center;justify-content:center}
 .qris-img{width:100%;height:100%;object-fit:contain}
+.qris-note{font-size:.72rem;color:var(--red);text-align:center;margin-bottom:12px;padding:6px 10px;background:#e05a5a15;border-radius:8px;border:1px solid #e05a5a30}
 .qris-steps{text-align:left;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px;font-size:.82rem;color:var(--text2);line-height:2}
 
 /* ── CHAT ── */
