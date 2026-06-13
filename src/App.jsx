@@ -192,7 +192,7 @@ function OrderModal({p}) {
         setLocState("error");
         let msg = "Gagal mengambil lokasi.";
         if (err.code === 1) {
-          msg = "Izin lokasi DITOLAK.\n👉 Buka: Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan";
+          msg = "Izin lokasi DITOLAK.\n👉 Buka: Pengaturan → Aplikasi → Katalog Aparfume → Izin → Lokasi → Izinkan";
         } else if (err.code === 2) {
           msg = "GPS tidak dapat ditemukan. Pastikan GPS aktif dan Anda berada di area dengan sinyal.";
         } else if (err.code === 3) {
@@ -359,7 +359,7 @@ function OrderModal({p}) {
         </p>
         <div className="qris-img-wrap">
           <img
-            src="https://gopay.co.id/app/scanqr?deeplink_source=request_money"
+            src="https://ik.imagekit.io/bn7fafwae/logo/parevie.jpg"
             alt="QRIS Parevie"
             className="qris-img"
             onError={(e)=>{e.target.onerror=null;e.target.style.display='none';}}
