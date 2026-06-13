@@ -359,7 +359,7 @@ function OrderModal({p}) {
         </p>
         <div className="qris-img-wrap">
           <img
-            src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png"
+            src="https://gopay.co.id/app/scanqr?deeplink_source=request_money"
             alt="QRIS Parevie"
             className="qris-img"
             onError={(e)=>{e.target.onerror=null;e.target.style.display='none';}}
