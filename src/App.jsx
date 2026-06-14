@@ -18,7 +18,7 @@ const app     = initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
 
-// ─── SVG Placeholder ───────────────────────────────────────────────────────
+// ─── SVG Placeholder ──────────────────────────────────────────────────────
 const IMG_PH = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
     <rect width="400" height="400" fill="#1a1a28"/>
@@ -29,29 +29,29 @@ const IMG_PH = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(
   </svg>`
 )}`;
 
-// ─── Helpers ───────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 const fRp = (n) =>
   new Intl.NumberFormat("id-ID",{style:"currency",currency:"IDR",maximumFractionDigits:0}).format(n??0);
 
 const getImg = (p) => {
-  if (Array.isArray(p.images)) {
+  if (Array.isArray(p?.images)) {
     const u = p.images.find(i=>typeof i==="string"&&i.startsWith("http"));
     if (u) return u;
   }
-  if (typeof p.images==="string"&&p.images.startsWith("http")) return p.images;
-  if (typeof p.image ==="string"&&p.image.startsWith("http"))  return p.image;
+  if (typeof p?.images==="string"&&p.images.startsWith("http")) return p.images;
+  if (typeof p?.image ==="string"&&p.image.startsWith("http"))  return p.image;
   return "";
 };
 
 const normGender = (g="") => {
   const v = g.toLowerCase().trim();
-  if (["male","man"].includes(v))          return "Male";
-  if (["female","woman"].includes(v))      return "Female";
-  if (["unisex","both","all"].includes(v)) return "Unisex";
+  if (["male","man"].includes(v))           return "Male";
+  if (["female","woman"].includes(v))       return "Female";
+  if (["unisex","both","all"].includes(v))  return "Unisex";
   return g ? g.charAt(0).toUpperCase()+g.slice(1) : "";
 };
 
-const getStock = (p) => Number(p.stock ?? p.size ?? 0);
+const getStock = (p) => Number(p?.stock ?? p?.size ?? 0);
 
 const Stars = ({val=0}) => {
   const full=Math.floor(val), half=val%1>=0.5;
@@ -67,7 +67,7 @@ const Stars = ({val=0}) => {
   );
 };
 
-// ─── Icons ─────────────────────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────
 const Ic = {
   Plus:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   Edit:   ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
@@ -85,9 +85,10 @@ const Ic = {
   Chat:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   Menu:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   Qris:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="21" y1="14" x2="21" y2="17"/></svg>,
+  Check:  ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>,
 };
 
-// ─── Modal ─────────────────────────────────────────────────────────────────
+// ─── Modal ────────────────────────────────────────────────────────────────
 function Modal({open, onClose, children}) {
   useEffect(()=>{
     const h=(e)=>e.key==="Escape"&&onClose();
@@ -106,7 +107,7 @@ function Modal({open, onClose, children}) {
   );
 }
 
-// ─── Product Card ──────────────────────────────────────────────────────────
+// ─── Product Card — stok realtime dari prop langsung ─────────────────────
 function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
   const img   = getImg(p);
   const badge = p.bestSeller?"Best Seller":p.isNew?"New":(p.isSale||p.onSale)?"Sale":(p.badge||"");
@@ -116,10 +117,10 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
       <div className="card-img-wrap">
         <img src={img||IMG_PH} alt={p.name} className="card-img"
           onError={(e)=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
-        {badge && <span className={`bdg bdg-${badge.toLowerCase().replace(/\s/g,"-")}`}>{badge}</span>}
-        {p.isActive===false && <span className="bdg-inactive">Nonaktif</span>}
-        {stok===0 && <div className="sold-out-overlay">HABIS</div>}
-        {isAdmin && (
+        {badge&&<span className={`bdg bdg-${badge.toLowerCase().replace(/\s/g,"-")}`}>{badge}</span>}
+        {p.isActive===false&&<span className="bdg-inactive">Nonaktif</span>}
+        {stok===0&&<div className="sold-out-overlay">HABIS</div>}
+        {isAdmin&&(
           <div className="card-adm" onClick={(e)=>e.stopPropagation()}>
             <button className="ab edit" onClick={()=>onEdit(p)}><Ic.Edit/></button>
             <button className="ab del"  onClick={()=>onDelete(p)}><Ic.Trash/></button>
@@ -129,18 +130,21 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
       <div className="card-body">
         <p className="card-cat"><Ic.Tag/> {normGender(p.gender)||p.category||"—"}</p>
         <h3 className="card-name">{p.name}</h3>
-        {p.rating>0 && <Stars val={p.rating}/>}
+        {p.rating>0&&<Stars val={p.rating}/>}
         <div className="card-foot">
           <span className="card-price">{fRp(p.price)}</span>
-          <span className={`spill${stok<10?" low":""}`}>{stok} stok</span>
+          {/* stok realtime — warna otomatis merah jika < 10 */}
+          <span className={`spill${stok===0?" out":stok<10?" low":""}`}>
+            {stok===0?"Habis":`${stok} stok`}
+          </span>
         </div>
-        {p.sold>0 && <p className="card-sold">{p.sold} terjual</p>}
+        {p.sold>0&&<p className="card-sold">{p.sold} terjual</p>}
       </div>
     </div>
   );
 }
 
-// ─── ORDER MODAL ───────────────────────────────────────────────────────────
+// ─── ORDER MODAL ──────────────────────────────────────────────────────────
 function OrderModal({p}) {
   const stok       = getStock(p);
   const [step,     setStep]    = useState("form");
@@ -148,230 +152,153 @@ function OrderModal({p}) {
   const [phone,    setPhone]   = useState("");
   const [addr,     setAddr]    = useState("");
   const [note,     setNote]    = useState("");
-  const [locState, setLocState]= useState("idle"); // idle | loading | done | error
+  const [locState, setLocState]= useState("idle");
   const [gpsText,  setGpsText] = useState("");
   const [orderId,  setOId]     = useState(null);
   const [msgs,     setMsgs]    = useState([]);
   const [chatTxt,  setChatTxt] = useState("");
   const [submitting,setSub]    = useState(false);
+  const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── GPS: kompatibel Android WebView + Capacitor ──
   const getLocation = () => {
-    setLocState("loading");
-    setGpsText("Mengambil lokasi GPS…");
-
-    // Cek ketersediaan geolocation API
     if (!navigator.geolocation) {
       setLocState("error");
-      setGpsText("GPS tidak tersedia. Pastikan izin lokasi diaktifkan di Pengaturan Aplikasi.");
+      setGpsText("GPS tidak tersedia di perangkat ini.");
       return;
     }
-
-    // Timeout manual — Android WebView kadang tidak trigger callback error
-    const timeoutId = setTimeout(() => {
+    setLocState("loading");
+    setGpsText("Mengambil lokasi GPS…");
+    const tid = setTimeout(()=>{
       setLocState("error");
-      setGpsText("Timeout. Pastikan GPS aktif dan izin lokasi diberikan di Pengaturan → Aplikasi → KatalogParfum → Izin → Lokasi.");
-    }, 15000);
-
+      setGpsText("Timeout. Aktifkan GPS & izinkan lokasi di Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi.");
+    },15000);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clearTimeout(timeoutId);
-        const la = pos.coords.latitude.toFixed(6);
-        const lo = pos.coords.longitude.toFixed(6);
-        const mapsUrl = `https://maps.google.com/?q=${la},${lo}`;
+      (pos)=>{
+        clearTimeout(tid);
+        const la=pos.coords.latitude.toFixed(6), lo=pos.coords.longitude.toFixed(6);
+        const url=`https://maps.google.com/?q=${la},${lo}`;
         setGpsText(`📍 ${la}, ${lo}`);
         setLocState("done");
-        setAddr(prev => {
-          if (prev.includes("GPS:")) return prev;
-          return (prev.trim() ? prev + "\n" : "") + `GPS: ${mapsUrl}`;
-        });
+        setAddr(prev=>prev.includes("GPS:")?prev:(prev.trim()?prev+"\n":"")+`GPS: ${url}`);
       },
-      (err) => {
-        clearTimeout(timeoutId);
+      (err)=>{
+        clearTimeout(tid);
         setLocState("error");
-        let msg = "Gagal mengambil lokasi.";
-        if (err.code === 1) {
-          msg = "Izin lokasi DITOLAK.\n👉 Buka: Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan";
-        } else if (err.code === 2) {
-          msg = "GPS tidak dapat ditemukan. Pastikan GPS aktif dan Anda berada di area dengan sinyal.";
-        } else if (err.code === 3) {
-          msg = "Timeout. GPS lambat merespons. Coba lagi di area terbuka.";
-        }
-        setGpsText(msg);
+        const m=err.code===1?"Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan"
+          :err.code===2?"GPS tidak dapat ditemukan. Pastikan GPS aktif."
+          :"Timeout. Coba di area terbuka.";
+        setGpsText(m);
       },
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 0,
-      }
+      {enableHighAccuracy:true,timeout:12000,maximumAge:0}
     );
   };
 
-  // ── Submit pesanan ke Firestore ──
   const submitOrder = async () => {
-    if (!name.trim())  return alert("Nama wajib diisi!");
+    if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
-    if (!addr.trim())  return alert("Alamat pengiriman wajib diisi!");
+    if (!addr.trim()) return alert("Alamat pengiriman wajib diisi!");
     setSub(true);
     try {
-      // 1. Simpan pesanan
-      const oRef = await addDoc(collection(db,"orders"), {
-        productId:   p.id,
-        productName: p.name,
-        productImg:  getImg(p),
-        price:       p.price,
-        buyerName:   name.trim(),
-        buyerPhone:  phone.trim(),
-        address:     addr.trim(),
-        note:        note.trim(),
-        status:      "pending",
-        createdAt:   serverTimestamp(),
+      const oRef = await addDoc(collection(db,"orders"),{
+        productId:p.id, productName:p.name, productImg:getImg(p),
+        price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
+        address:addr.trim(), note:note.trim(), status:"pending",
+        createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
-      // Simpan ke in-memory store agar user bisa buka chat kapan saja
       saveMyOrder(oRef.id, p.name, getImg(p), p.price);
-
-      // 2. Kirim notifikasi ke admin
-      await addDoc(collection(db,"notifications"), {
-        type:      "new_order",
-        orderId:   oRef.id,
-        message:   `🛒 Pesanan baru: ${p.name}`,
-        detail:    `Dari: ${name.trim()} (${phone.trim()})`,
-        address:   addr.trim(),
-        read:      false,
-        createdAt: serverTimestamp(),
+      await addDoc(collection(db,"notifications"),{
+        type:"new_order", orderId:oRef.id,
+        message:`🛒 Pesanan baru: ${p.name}`,
+        detail:`Dari: ${name.trim()} (${phone.trim()})`,
+        address:addr.trim(), read:false, createdAt:serverTimestamp(),
       });
-
-      // 3. Pesan otomatis di chat
-      await addDoc(collection(db,`orders/${oRef.id}/chats`), {
-        from:      "system",
-        text:      `Pesanan diterima! Silakan tunggu konfirmasi admin. Produk: ${p.name} — ${fRp(p.price)}`,
-        createdAt: serverTimestamp(),
+      await addDoc(collection(db,`orders/${oRef.id}/chats`),{
+        from:"system",
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}`,
+        createdAt:serverTimestamp(),
       });
-
       setStep("qris");
-    } catch(e) {
-      alert("Gagal membuat pesanan: " + e.message);
-    }
+    } catch(e){ alert("Gagal membuat pesanan: "+e.message); }
     setSub(false);
   };
 
-  // ── Konfirmasi sudah bayar ──
-  const [paying, setPaying] = useState(false);
   const confirmPay = async () => {
-    if (!orderId) {
-      alert("ID pesanan tidak ditemukan. Silakan buat pesanan ulang.");
-      return;
-    }
+    if (!orderId) return alert("ID pesanan tidak ditemukan.");
     setPaying(true);
     try {
-      await updateDoc(doc(db,"orders",orderId), {
-        status: "paid_pending_confirm",
-        paidAt: serverTimestamp(),
+      await updateDoc(doc(db,"orders",orderId),{status:"paid_pending_confirm",paidAt:serverTimestamp()});
+      await addDoc(collection(db,`orders/${orderId}/chats`),{
+        from:"buyer",
+        text:`✅ Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
+        createdAt:serverTimestamp(),
       });
-      await addDoc(collection(db,`orders/${orderId}/chats`), {
-        from: "buyer",
-        text: `✅ Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
-        createdAt: serverTimestamp(),
-      });
-      // Notif ke admin
-      await addDoc(collection(db,"notifications"), {
-        type:    "payment_received",
-        orderId: orderId,
-        message: `💰 Pembayaran masuk: ${p.name} — ${fRp(p.price)}`,
-        read:    false,
-        createdAt: serverTimestamp(),
+      await addDoc(collection(db,"notifications"),{
+        type:"payment_received", orderId,
+        message:`💰 Pembayaran: ${p.name} — ${fRp(p.price)}`,
+        read:false, createdAt:serverTimestamp(),
       });
       setStep("chat");
-    } catch(e) {
-      alert("Gagal konfirmasi: " + e.message + "\n\nPastikan koneksi internet aktif dan coba lagi.");
-    }
+    } catch(e){ alert("Gagal konfirmasi: "+e.message); }
     setPaying(false);
   };
 
-  // ── Chat realtime ──
   useEffect(()=>{
     if (step!=="chat"||!orderId) return;
-    const q = query(collection(db,`orders/${orderId}/chats`), orderBy("createdAt","asc"));
-    const unsub = onSnapshot(q, snap=>{
+    const q=query(collection(db,`orders/${orderId}/chats`),orderBy("createdAt","asc"));
+    const u=onSnapshot(q,snap=>{
       setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
       setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
-    return ()=>unsub();
+    return ()=>u();
   },[step,orderId]);
 
   const sendChat = async () => {
     if (!chatTxt.trim()||!orderId) return;
-    await addDoc(collection(db,`orders/${orderId}/chats`), {
-      from:"buyer", text:chatTxt.trim(), createdAt:serverTimestamp(),
-    });
-    setChatTxt("");
+    try {
+      await addDoc(collection(db,`orders/${orderId}/chats`),{from:"buyer",text:chatTxt.trim(),createdAt:serverTimestamp()});
+      setChatTxt("");
+    } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  // ── STEP: form ──
   if (step==="form") return (
     <div className="ord-wrap">
       <div className="ord-hdr">
         <img src={getImg(p)||IMG_PH} alt={p.name} className="ord-thumb"
           onError={(e)=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
-        <div>
-          <p className="ord-pname">{p.name}</p>
-          <p className="ord-price">{fRp(p.price)}</p>
-        </div>
+        <div><p className="ord-pname">{p.name}</p><p className="ord-price">{fRp(p.price)}</p></div>
       </div>
       <div className="ord-body">
-        <div className="fg">
-          <label>Nama Lengkap *</label>
-          <input className="finput" value={name} onChange={e=>setName(e.target.value)} placeholder="Nama penerima"/>
-        </div>
-        <div className="fg">
-          <label>No. WhatsApp *</label>
-          <input className="finput" type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08xxxxxxxxxx"/>
-        </div>
+        <div className="fg"><label>Nama Lengkap *</label>
+          <input className="finput" value={name} onChange={e=>setName(e.target.value)} placeholder="Nama penerima"/></div>
+        <div className="fg"><label>No. WhatsApp *</label>
+          <input className="finput" type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="08xxxxxxxxxx"/></div>
         <div className="fg">
           <label>Alamat Pengiriman *</label>
           <textarea className="finput ftarea" rows={3} value={addr}
-            onChange={e=>setAddr(e.target.value)}
-            placeholder="Jalan, RT/RW, Kelurahan, Kota, Kode Pos…"/>
-          {/* Tombol GPS — pastikan onclick berjalan */}
-          <button
-            type="button"
+            onChange={e=>setAddr(e.target.value)} placeholder="Jalan, RT/RW, Kelurahan, Kota…"/>
+          <button type="button"
             className={`btn-loc${locState==="loading"?" loading":locState==="done"?" done":""}`}
-            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); getLocation(); }}
-          >
+            onClick={(e)=>{e.preventDefault();e.stopPropagation();getLocation();}}>
             <Ic.Loc/>
-            {locState==="loading" ? " Mengambil GPS…" :
-             locState==="done"    ? " Lokasi Tersimpan ✓" :
-             locState==="error"   ? " Coba Lagi" : " Tambah Lokasi GPS"}
+            {locState==="loading"?" Mengambil GPS…":locState==="done"?" Lokasi Tersimpan ✓":locState==="error"?" Coba Lagi":" Tambah Lokasi GPS"}
           </button>
-          {gpsText && (
-            <p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>
-              {gpsText}
-            </p>
-          )}
+          {gpsText&&<p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>{gpsText}</p>}
         </div>
-        <div className="fg">
-          <label>Catatan (opsional)</label>
-          <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/>
-        </div>
+        <div className="fg"><label>Catatan (opsional)</label>
+          <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
         <div className="ord-info">
-          <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong> (admin pilihkan)</p>
+          <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
         </div>
-        <button
-          type="button"
-          className="btn-order"
-          onClick={submitOrder}
-          disabled={submitting}
-        >
-          {submitting ? "⏳ Mengirim Pesanan…" : "📦 Buat Pesanan"}
+        <button type="button" className="btn-order" onClick={submitOrder} disabled={submitting}>
+          {submitting?"⏳ Mengirim…":"📦 Buat Pesanan"}
         </button>
       </div>
     </div>
   );
 
-  // ── STEP: qris ──
   if (step==="qris") return (
     <div className="ord-wrap">
       <div className="qris-head"><Ic.Qris/> <span>Pembayaran QRIS</span></div>
@@ -380,28 +307,11 @@ function OrderModal({p}) {
         <p style={{color:"var(--text3)",fontSize:".82rem",marginBottom:16}}>
           Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
         </p>
-        {/* 
-          ⚠️ PENTING: Gunakan gambar QRIS ASLI dari bank/dompet digital
-          JANGAN edit gambar QRIS (tambah logo, crop, filter, dll)
-          karena akan merusak checksum CRC-16 dan QR menjadi tidak valid.
-          
-          Cara mendapatkan QRIS asli:
-          - GoPay/Gojek: Aplikasi GoPay → Terima Pembayaran → Download QR
-          - DANA: Aplikasi DANA → QR Saya → Download
-          - BCA/BRI/Mandiri: Dashboard merchant → Download QRIS
-          
-          Upload gambar QRIS asli ke Firebase Storage atau ImageKit,
-          lalu ganti URL di bawah ini:
-        */}
         <div className="qris-img-wrap">
-          <img
-            src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png?updatedAt=1781320550809"
-            alt="QRIS Parevie"
-            className="qris-img"
-            onError={(e)=>{e.target.onerror=null;e.target.style.display='none';}}
-          />
+          <img src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png?updatedAt=1781320550809"
+            alt="QRIS Parevie" className="qris-img"
+            onError={(e)=>{e.target.onerror=null;e.target.style.display="none";}}/>
         </div>
-        <p className="qris-note">⚠️ Gunakan QRIS asli tanpa editan agar bisa di-scan</p>
         <div className="qris-steps">
           <p>1. Buka e-wallet / m-banking</p>
           <p>2. Scan kode QR di atas</p>
@@ -410,32 +320,24 @@ function OrderModal({p}) {
         </div>
         <button type="button" className={`btn-order${paying?" disabled":""}`}
           onClick={confirmPay} disabled={paying}>
-          {paying ? "⏳ Memproses…" : "✅ Sudah Bayar → Chat Admin"}
+          {paying?"⏳ Memproses…":"✅ Sudah Bayar → Chat Admin"}
         </button>
       </div>
     </div>
   );
 
-  // ── STEP: chat ──
   return (
     <div className="chat-wrap">
-      <div className="chat-hdr">
-        <Ic.Chat/> <span>Chat dengan Admin</span>
-        <span className="chat-status">● Online</span>
-      </div>
-      <div className="chat-info">
-        #{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}
-      </div>
+      <div className="chat-hdr"><Ic.Chat/> <span>Chat dengan Admin</span>
+        <span className="chat-status">● Online</span></div>
+      <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}</div>
       <div className="chat-msgs" ref={chatRef}>
         {msgs.map(m=>(
           <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
             {m.from==="system"
-              ? <div className="csys">{m.text}</div>
-              : <>
-                  <div className="cbubble">{m.text}</div>
-                  <span className="ctime">{m.from==="buyer"?"Saya":"Admin"}</span>
-                </>
-            }
+              ?<div className="csys">{m.text}</div>
+              :<><div className={`cbubble ${m.from==="buyer"?"bubble-buyer":"bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from==="buyer"?"Saya":"👤 Admin"}</span></>}
           </div>
         ))}
       </div>
@@ -449,23 +351,125 @@ function OrderModal({p}) {
   );
 }
 
-// ─── ADMIN CHAT PANEL ──────────────────────────────────────────────────────
+// ─── In-memory store pesanan user ─────────────────────────────────────────
+const userOrdersStore = { orders: [] };
+const saveMyOrder = (orderId, productName, productImg, price) => {
+  if (!userOrdersStore.orders.find(o=>o.orderId===orderId))
+    userOrdersStore.orders.unshift({orderId,productName,productImg,price});
+};
+
+// ─── USER CHAT PANEL ──────────────────────────────────────────────────────
+function UserChatPanel() {
+  const [selOrd, setSelOrd] = useState(null);
+  const [msgs,   setMsgs]   = useState([]);
+  const [txt,    setTxt]    = useState("");
+  const [ordData,setOrdData]= useState(null);
+  const chatRef = useRef(null);
+  const myOrders = userOrdersStore.orders;
+
+  useEffect(()=>{
+    if (!selOrd) return;
+    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
+    const u1=onSnapshot(q,snap=>{
+      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
+      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
+    });
+    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{ if(snap.exists()) setOrdData(snap.data()); });
+    return ()=>{ u1(); u2(); };
+  },[selOrd]);
+
+  const sendChat = async () => {
+    if (!txt.trim()||!selOrd) return;
+    try {
+      await addDoc(collection(db,`orders/${selOrd}/chats`),{from:"buyer",text:txt.trim(),createdAt:serverTimestamp()});
+      setTxt("");
+    } catch(e){ alert("Gagal: "+e.message); }
+  };
+
+  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
+    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
+  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
+    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+
+  if (myOrders.length===0) return (
+    <div className="acp">
+      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <div className="empty" style={{padding:"40px 16px"}}>
+        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
+        <p>Pesanan akan muncul setelah checkout</p>
+      </div>
+    </div>
+  );
+
+  if (!selOrd) return (
+    <div className="acp">
+      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <div className="acp-list">
+        {myOrders.map(o=>(
+          <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
+            <img src={o.productImg||IMG_PH} alt={o.productName}
+              style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
+              onError={e=>{e.target.src=IMG_PH;}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <p className="acp-pname">{o.productName}</p>
+              <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
+            </div>
+            <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const status = ordData?.status||"pending";
+  const found  = myOrders.find(o=>o.orderId===selOrd);
+  return (
+    <div className="chat-wrap">
+      <div className="chat-hdr">
+        <button type="button" onClick={()=>setSelOrd(null)} className="btn-back-chat">←</button>
+        <Ic.Chat/> <span>{found?.productName}</span>
+      </div>
+      <div className="status-bar" style={{background:SC[status]+"22",borderColor:SC[status]+"55",color:SC[status]}}>
+        {SL[status]||status}
+      </div>
+      <div className="chat-msgs" ref={chatRef}>
+        {msgs.map(m=>(
+          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
+            {m.from==="system"
+              ?<div className="csys">{m.text}</div>
+              :<><div className={`cbubble ${m.from==="buyer"?"bubble-buyer":"bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from==="buyer"?"Saya":"👤 Admin"}</span></>}
+          </div>
+        ))}
+      </div>
+      <div className="chat-inp-row">
+        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e=>setTxt(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
+      </div>
+    </div>
+  );
+}
+
+// ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
 function AdminChatPanel() {
   const [orders,  setOrders]  = useState([]);
   const [selOrd,  setSelOrd]  = useState(null);
   const [msgs,    setMsgs]    = useState([]);
   const [txt,     setTxt]     = useState("");
+  const [delConf, setDelConf] = useState(null); // id pesan yang mau dihapus
   const chatRef = useRef(null);
 
   useEffect(()=>{
-    const q = query(collection(db,"orders"), orderBy("createdAt","desc"));
-    return onSnapshot(q, snap=>setOrders(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const q=query(collection(db,"orders"),orderBy("createdAt","desc"));
+    return onSnapshot(q,snap=>setOrders(snap.docs.map(d=>({id:d.id,...d.data()}))));
   },[]);
 
   useEffect(()=>{
     if (!selOrd) return;
-    const q = query(collection(db,`orders/${selOrd.id}/chats`), orderBy("createdAt","asc"));
-    return onSnapshot(q, snap=>{
+    const q=query(collection(db,`orders/${selOrd.id}/chats`),orderBy("createdAt","asc"));
+    return onSnapshot(q,snap=>{
       setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
       setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
@@ -474,74 +478,131 @@ function AdminChatPanel() {
   const send = async () => {
     if (!txt.trim()||!selOrd) return;
     try {
-      await addDoc(collection(db,`orders/${selOrd.id}/chats`), {
-        from:"admin", text:txt.trim(), createdAt:serverTimestamp(),
+      await addDoc(collection(db,`orders/${selOrd.id}/chats`),{
+        from:"admin",text:txt.trim(),createdAt:serverTimestamp(),
       });
       setTxt("");
-    } catch(e) { alert("Gagal kirim: "+e.message); }
+    } catch(e){ alert("Gagal kirim: "+e.message); }
   };
 
   const updStatus = async (s) => {
     if (!selOrd) return;
     try {
-      await updateDoc(doc(db,"orders",selOrd.id), { status:s, updatedAt:serverTimestamp() });
+      await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
       setSelOrd(o=>({...o,status:s}));
-    } catch(e) { alert("Gagal update status: "+e.message); }
+      // Kirim pesan sistem ke buyer
+      const statusMsg = {
+        confirmed:"✅ Pesanan kamu sudah dikonfirmasi admin! Sedang disiapkan.",
+        shipped:"🚚 Pesanan kamu sedang dalam pengiriman!",
+        done:"🎉 Pesanan selesai! Terima kasih sudah berbelanja.",
+        cancelled:"❌ Pesanan dibatalkan. Hubungi admin untuk info lebih lanjut.",
+      };
+      if (statusMsg[s]) {
+        await addDoc(collection(db,`orders/${selOrd.id}/chats`),{
+          from:"system",text:statusMsg[s],createdAt:serverTimestamp(),
+        });
+      }
+    } catch(e){ alert("Gagal update status: "+e.message); }
   };
 
-  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+  const deleteMsg = async (chatId) => {
+    try {
+      await deleteDoc(doc(db,`orders/${selOrd.id}/chats`,chatId));
+    } catch(e){ alert("Gagal hapus: "+e.message); }
+    setDelConf(null);
+  };
+
+  const deleteOrder = async (ordId) => {
+    if (!window.confirm("Hapus pesanan ini permanen?")) return;
+    try { await deleteDoc(doc(db,"orders",ordId)); setSelOrd(null); }
+    catch(e){ alert("Gagal: "+e.message); }
+  };
+
+  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",
+    confirmed:"#4caf82",shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+  const SL = {pending:"Pending",paid_pending_confirm:"Sudah Bayar",
+    confirmed:"Konfirmasi",shipped:"Kirim",done:"Selesai",cancelled:"Batal"};
 
   return (
     <div className="acp">
       <h3 className="acp-ttl"><Ic.Bell/> Pesanan Masuk</h3>
       {!selOrd ? (
         <div className="acp-list">
-          {orders.length===0 && <p className="chat-empty">Belum ada pesanan masuk</p>}
+          {orders.length===0&&<p className="chat-empty">Belum ada pesanan masuk</p>}
           {orders.map(o=>(
             <div key={o.id} className="acp-item" onClick={()=>setSelOrd(o)}>
               <div style={{flex:1,minWidth:0}}>
                 <p className="acp-pname">{o.productName}</p>
                 <p className="acp-buyer">{o.buyerName} · {o.buyerPhone}</p>
-                <p className="acp-addr">{o.address?.slice(0,70)}{o.address?.length>70?"…":""}</p>
+                <p className="acp-addr">{o.address?.slice(0,65)}{o.address?.length>65?"…":""}</p>
               </div>
               <div style={{flexShrink:0,textAlign:"right"}}>
                 <p className="acp-price">{fRp(o.price)}</p>
-                <span className="acp-status" style={{color:SC[o.status]||"#888"}}>{o.status||"pending"}</span>
+                <span className="acp-status" style={{color:SC[o.status]||"#888",textTransform:"uppercase",fontSize:".68rem",fontWeight:700}}>
+                  {SL[o.status]||o.status||"pending"}
+                </span>
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div className="acp-detail">
-          <button type="button" className="btn-back" onClick={()=>setSelOrd(null)}>← Kembali</button>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+            <button type="button" className="btn-back" onClick={()=>setSelOrd(null)}>← Kembali</button>
+            <button type="button" className="btn-del-order" onClick={()=>deleteOrder(selOrd.id)}>
+              <Ic.Trash/> Hapus Pesanan
+            </button>
+          </div>
           <div className="acp-order-info">
             <p><strong>{selOrd.productName}</strong> · {fRp(selOrd.price)}</p>
             <p>👤 {selOrd.buyerName} · 📱 {selOrd.buyerPhone}</p>
             <p>📍 {selOrd.address}</p>
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
           </div>
+
+          {/* Status buttons */}
           <div className="acp-status-row">
-            {["pending","confirmed","shipped","done","cancelled"].map(s=>(
-              <button key={s} type="button"
-                className={`btn-status${selOrd.status===s?" on":""}`}
-                onClick={()=>updStatus(s)}>{s}</button>
+            {Object.entries(SL).map(([k,v])=>(
+              <button key={k} type="button"
+                className={`btn-status${selOrd.status===k?" on":""}`}
+                style={selOrd.status===k?{background:SC[k],borderColor:SC[k]}:{}}
+                onClick={()=>updStatus(k)}>{v}</button>
             ))}
           </div>
-          <div className="chat-msgs" ref={chatRef} style={{height:200}}>
+
+          {/* Chat — admin kanan (gold), buyer kiri (abu) */}
+          <div className="chat-msgs" ref={chatRef} style={{height:220}}>
             {msgs.map(m=>(
               <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
                 {m.from==="system"
-                  ? <div className="csys">{m.text}</div>
-                  : <>
-                      <div className="cbubble">{m.text}</div>
-                      <span className="ctime">{m.from==="admin"?"Admin":"Pembeli"}</span>
-                    </>
+                  ?<div className="csys">{m.text}</div>
+                  :<div style={{display:"flex",flexDirection:"column",alignItems:m.from==="admin"?"flex-end":"flex-start",gap:2}}>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:4,flexDirection:m.from==="admin"?"row-reverse":"row"}}>
+                      <div className={`cbubble ${m.from==="admin"?"bubble-admin":"bubble-buyer"}`}>{m.text}</div>
+                      {/* Tombol hapus pesan — hanya admin yang lihat */}
+                      <button type="button" className="msg-del-btn"
+                        onClick={()=>setDelConf(m.id)} title="Hapus pesan">
+                        <Ic.Trash/>
+                      </button>
+                    </div>
+                    <span className="ctime">{m.from==="admin"?"👑 Admin":"👤 "+selOrd.buyerName}</span>
+                  </div>
                 }
               </div>
             ))}
           </div>
+
+          {/* Konfirmasi hapus pesan */}
+          {delConf&&(
+            <div className="del-confirm-bar">
+              <span>Hapus pesan ini?</span>
+              <button type="button" className="btn-yes-del" onClick={()=>deleteMsg(delConf)}>Ya, Hapus</button>
+              <button type="button" className="btn-no-del" onClick={()=>setDelConf(null)}>Batal</button>
+            </div>
+          )}
+
           <div className="chat-inp-row">
-            <input className="finput" style={{flex:1}} placeholder="Balas pesan…"
+            <input className="finput" style={{flex:1}} placeholder="Balas pesan pembeli…"
               value={txt} onChange={e=>setTxt(e.target.value)}
               onKeyDown={e=>e.key==="Enter"&&send()}/>
             <button type="button" className="btn-send" onClick={send}><Ic.Send/></button>
@@ -552,22 +613,20 @@ function AdminChatPanel() {
   );
 }
 
-// ─── Detail ────────────────────────────────────────────────────────────────
+// ─── Detail ───────────────────────────────────────────────────────────────
 function ProductDetail({p, onOrder}) {
-  const [idx,setIdx] = useState(0);
-  const imgs = Array.isArray(p.images)
-    ? p.images.filter(i=>typeof i==="string"&&i.startsWith("http"))
-    : (p.image?[p.image]:[]);
-  const stok = getStock(p);
-  const src  = imgs[idx]||IMG_PH;
+  const [idx,setIdx]=useState(0);
+  const imgs=Array.isArray(p.images)?p.images.filter(i=>typeof i==="string"&&i.startsWith("http")):(p.image?[p.image]:[]);
+  const stok=getStock(p);
+  const src=imgs[idx]||IMG_PH;
   return (
     <div className="detail">
       <div className="d-img-wrap">
         <img src={src} alt={p.name} className="d-img"
           onError={(e)=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
-        {stok===0 && <div className="sold-out-overlay lg">STOK HABIS</div>}
+        {stok===0&&<div className="sold-out-overlay lg">STOK HABIS</div>}
       </div>
-      {imgs.length>1 && (
+      {imgs.length>1&&(
         <div className="d-thumbs">
           {imgs.map((u,i)=>(
             <img key={i} src={u} alt="" className={`d-thumb${i===idx?" on":""}`}
@@ -579,27 +638,17 @@ function ProductDetail({p, onOrder}) {
       <div className="d-body">
         <p className="card-cat"><Ic.Tag/> {normGender(p.gender)||p.category||"—"}</p>
         <h2 className="d-name">{p.name}</h2>
-        {p.rating>0 && <Stars val={p.rating}/>}
+        {p.rating>0&&<Stars val={p.rating}/>}
         <p className="d-price">{fRp(p.price)}</p>
         <div className="d-pills">
-          <span className={`spill${stok<10?" low":""}`}>{stok} stok</span>
-          {p.sold>0 && <span className="spill sold">{p.sold} terjual</span>}
-          {p.bestSeller && <span className="bdg bdg-best-seller" style={{position:"static",fontSize:".7rem"}}>Best Seller</span>}
+          <span className={`spill${stok===0?" out":stok<10?" low":""}`}>{stok===0?"Habis":`${stok} stok`}</span>
+          {p.sold>0&&<span className="spill sold">{p.sold} terjual</span>}
+          {p.bestSeller&&<span className="bdg bdg-best-seller" style={{position:"static",fontSize:".7rem"}}>Best Seller</span>}
         </div>
-        {p.aroma && (
-          <div className="d-section">
-            <p className="d-sec-title">🌸 Aroma</p>
-            <p className="d-sec-text">{p.aroma}</p>
-          </div>
-        )}
-        <div className="d-section">
-          <p className="d-sec-title">📋 Deskripsi</p>
-          <p className="d-sec-text">{p.desc||p.description||"—"}</p>
-        </div>
-        <button type="button"
-          className={`btn-order${stok===0?" disabled":""}`}
-          onClick={()=>stok>0&&onOrder(p)}
-          disabled={stok===0}>
+        {p.aroma&&<div className="d-section"><p className="d-sec-title">🌸 Aroma</p><p className="d-sec-text">{p.aroma}</p></div>}
+        <div className="d-section"><p className="d-sec-title">📋 Deskripsi</p><p className="d-sec-text">{p.desc||p.description||"—"}</p></div>
+        <button type="button" className={`btn-order${stok===0?" disabled":""}`}
+          onClick={()=>stok>0&&onOrder(p)} disabled={stok===0}>
           {stok===0?"🚫 Stok Habis":"🛒 Pesan Sekarang"}
         </button>
       </div>
@@ -607,27 +656,25 @@ function ProductDetail({p, onOrder}) {
   );
 }
 
-// ─── Admin Login ───────────────────────────────────────────────────────────
+// ─── Admin Login ──────────────────────────────────────────────────────────
 function AdminLogin({onLogin}) {
   const [pass,setPass]=useState(""), [err,setErr]=useState(false);
-  const PASS = import.meta.env.VITE_ADMIN_PASSWORD||"admin123";
+  const PASS=import.meta.env.VITE_ADMIN_PASSWORD||"admin123";
   const go=()=>{ if(pass===PASS) onLogin(); else{setErr(true);setTimeout(()=>setErr(false),1400);} };
   return (
     <div className="alog">
       <div className="alog-ico"><Ic.Admin/></div>
-      <h3>Panel Admin</h3>
-      <p>Masukkan password untuk lanjut</p>
+      <h3>Panel Admin</h3><p>Masukkan password untuk lanjut</p>
       <input type="password" className={`finput${err?" err":""}`}
         placeholder="Password…" value={pass}
-        onChange={e=>setPass(e.target.value)}
-        onKeyDown={e=>e.key==="Enter"&&go()}/>
+        onChange={e=>setPass(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()}/>
       {err&&<p className="errmsg">Password salah!</p>}
       <button type="button" className="btn-save" style={{width:"100%",marginTop:10}} onClick={go}>Masuk</button>
     </div>
   );
 }
 
-// ─── Product Form ──────────────────────────────────────────────────────────
+// ─── Product Form ─────────────────────────────────────────────────────────
 function ProductForm({initial,onSave,onCancel,saving}) {
   const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
   const [f,setF]=useState(initial?{...blank,...initial}:blank);
@@ -647,7 +694,7 @@ function ProductForm({initial,onSave,onCancel,saving}) {
         await uploadBytes(r,file);
         const url=await getDownloadURL(r);
         images=[url,...images.filter(i=>i!==url)];
-      }catch{alert("Upload gagal");setUp(false);return;}
+      }catch(e){alert("Upload gagal: "+e.message);setUp(false);return;}
       setUp(false);
     }
     onSave({...f,price:Number(f.price),stock:Number(f.stock),rating:Number(f.rating),sold:Number(f.sold),images});
@@ -678,7 +725,7 @@ function ProductForm({initial,onSave,onCancel,saving}) {
           <select className="finput" value={f.gender} onChange={e=>ch("gender",e.target.value)}>
             <option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="unisex">Unisex</option>
           </select></div>
-        <div className="fg"><label>Harga (Rp) *</label><input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
+        <div className="fg"><label>Harga (Rp)*</label><input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
         <div className="fg"><label>Stok</label><input type="number" className="finput" value={f.stock} onChange={e=>ch("stock",e.target.value)}/></div>
         <div className="fg"><label>Rating</label><input type="number" step="0.1" min="0" max="5" className="finput" value={f.rating} onChange={e=>ch("rating",e.target.value)}/></div>
         <div className="fg"><label>Terjual</label><input type="number" className="finput" value={f.sold} onChange={e=>ch("sold",e.target.value)}/></div>
@@ -715,166 +762,35 @@ function ConfirmDelete({p,onConfirm,onCancel,saving}) {
   );
 }
 
-// ─── Simpan riwayat pesanan user (in-memory, bertahan selama app terbuka) ─
-// Key: orderId, Value: { orderId, productName, productImg, price, step }
-const userOrdersStore = { orders: [] };
-
-const saveMyOrder = (orderId, productName, productImg, price) => {
-  const exists = userOrdersStore.orders.find(o => o.orderId === orderId);
-  if (!exists) {
-    userOrdersStore.orders.unshift({ orderId, productName, productImg, price, savedAt: Date.now() });
-  }
-};
-
-// ─── USER CHAT — lihat riwayat & buka chat pesanan lama ──────────────────
-function UserChatPanel({ onClose }) {
-  const [selOrd, setSelOrd] = useState(null);
-  const [msgs,   setMsgs]   = useState([]);
-  const [txt,    setTxt]    = useState("");
-  const [ordData,setOrdData]= useState(null);
-  const chatRef = useRef(null);
-  const myOrders = userOrdersStore.orders;
-
-  // Load detail order yang dipilih
-  useEffect(()=>{
-    if (!selOrd) return;
-    // Listen chat
-    const q = query(collection(db,`orders/${selOrd}/chats`), orderBy("createdAt","asc"));
-    const unsub = onSnapshot(q, snap=>{
-      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
-    });
-    // Listen status pesanan
-    const unsub2 = onSnapshot(doc(db,"orders",selOrd), snap=>{
-      if (snap.exists()) setOrdData(snap.data());
-    });
-    return ()=>{ unsub(); unsub2(); };
-  },[selOrd]);
-
-  const sendChat = async () => {
-    if (!txt.trim()||!selOrd) return;
-    try {
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
-      });
-      setTxt("");
-    } catch(e){ alert("Gagal kirim: "+e.message); }
-  };
-
-  const STATUS_LABEL = {
-    pending:              "⏳ Menunggu konfirmasi admin",
-    paid_pending_confirm: "💰 Pembayaran menunggu verifikasi",
-    confirmed:            "✅ Pesanan dikonfirmasi",
-    shipped:              "🚚 Dalam pengiriman",
-    done:                 "🎉 Pesanan selesai",
-    cancelled:            "❌ Pesanan dibatalkan",
-  };
-  const STATUS_COLOR = {
-    pending:"#c9a84c", paid_pending_confirm:"#7c6af5",
-    confirmed:"#4caf82", shipped:"#29b6f6", done:"#4caf82", cancelled:"#e05a5a"
-  };
-
-  if (myOrders.length === 0) {
-    return (
-      <div className="acp">
-        <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-        <div className="empty" style={{padding:"40px 16px"}}>
-          <p style={{fontSize:"2rem"}}>🛒</p>
-          <h3>Belum ada pesanan</h3>
-          <p>Pesanan akan muncul di sini setelah kamu checkout</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!selOrd) {
-    return (
-      <div className="acp">
-        <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-        <div className="acp-list">
-          {myOrders.map(o=>(
-            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
-              <img src={o.productImg||IMG_PH} alt={o.productName}
-                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
-                onError={e=>{e.target.src=IMG_PH;}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <p className="acp-pname">{o.productName}</p>
-                <p className="acp-buyer">{fRp(o.price)}</p>
-                <p className="acp-addr">#{o.orderId.slice(-6).toUpperCase()}</p>
-              </div>
-              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const found = myOrders.find(o=>o.orderId===selOrd);
-  const status = ordData?.status || "pending";
-
-  return (
-    <div className="chat-wrap">
-      <div className="chat-hdr">
-        <button type="button" onClick={()=>setSelOrd(null)}
-          style={{background:"none",border:"none",color:"var(--gold)",cursor:"pointer",marginRight:4,fontSize:"1rem"}}>←</button>
-        <Ic.Chat/> <span>{found?.productName}</span>
-      </div>
-      {/* Status bar */}
-      <div className="chat-info" style={{color:STATUS_COLOR[status]||"#888",fontWeight:600}}>
-        {STATUS_LABEL[status]||status}
-      </div>
-      <div className="chat-msgs" ref={chatRef}>
-        {msgs.length===0&&<p className="chat-empty">Belum ada pesan</p>}
-        {msgs.map(m=>(
-          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
-            {m.from==="system"
-              ? <div className="csys">{m.text}</div>
-              : <>
-                  <div className="cbubble">{m.text}</div>
-                  <span className="ctime">{m.from==="buyer"?"Saya":"Admin"}</span>
-                </>
-            }
-          </div>
-        ))}
-      </div>
-      <div className="chat-inp-row">
-        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
-          value={txt} onChange={e=>setTxt(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
-        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
-      </div>
-    </div>
-  );
-}
+// ─── MAIN APP ─────────────────────────────────────────────────────────────
 export default function App() {
-  const [products,  setProducts]  = useState([]);
-  const [loading,   setLoading]   = useState(true);
-  const [search,    setSearch]    = useState("");
-  const [cat,       setCat]       = useState("All");
-  const [sort,      setSort]      = useState("newest");
-  const [selected,  setSelected]  = useState(null);
-  const [orderProd, setOrderProd] = useState(null);
-  const [editP,     setEditP]     = useState(null);
-  const [delP,      setDelP]      = useState(null);
-  const [showForm,  setShowForm]  = useState(false);
-  const [isAdmin,   setIsAdmin]   = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
-  const [showACP,   setShowACP]   = useState(false);
-  const [saving,    setSaving]    = useState(false);
-  const [dark,      setDark]      = useState(true);
-  const [menuOpen,  setMenuOpen]  = useState(false);
-  const [notifCnt,  setNotifCnt]  = useState(0);
-  const [showMyOrders, setShowMyOrders] = useState(false); // ← riwayat pesanan user
+  const [products,    setProducts]    = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [search,      setSearch]      = useState("");
+  const [cat,         setCat]         = useState("All");
+  const [sort,        setSort]        = useState("newest");
+  const [selected,    setSelected]    = useState(null);
+  const [orderProd,   setOrderProd]   = useState(null);
+  const [editP,       setEditP]       = useState(null);
+  const [delP,        setDelP]        = useState(null);
+  const [showForm,    setShowForm]    = useState(false);
+  const [isAdmin,     setIsAdmin]     = useState(false);
+  const [showLogin,   setShowLogin]   = useState(false);
+  const [showACP,     setShowACP]     = useState(false);
+  const [showMyOrders,setShowMyOrders]= useState(false);
+  const [saving,      setSaving]      = useState(false);
+  const [dark,        setDark]        = useState(true);
+  const [menuOpen,    setMenuOpen]    = useState(false);
+  const [notifCnt,    setNotifCnt]    = useState(0);
   const menuRef = useRef(null);
 
-  // Tutup menu saat klik luar
   useEffect(()=>{
     const h=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
 
+  // Realtime products — stok otomatis update
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
     const u=onSnapshot(q,
@@ -884,14 +800,14 @@ export default function App() {
     return ()=>u();
   },[]);
 
-  // Notif badge
+  // Notif badge admin
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"notifications"),where("read","==",false));
     return onSnapshot(q,s=>setNotifCnt(s.size));
   },[isAdmin]);
 
-  const GENDERS = ["All","Male","Female","Unisex"];
+  const GENDERS=["All","Male","Female","Unisex"];
 
   const matchGender=(p,tab)=>{
     if(tab==="All") return true;
@@ -913,12 +829,8 @@ export default function App() {
   const handleSave=async(data)=>{
     setSaving(true);
     try{
-      if(editP?.id){
-        const{id,...r}=data;
-        await updateDoc(doc(db,"products",editP.id),{...r,updatedAt:serverTimestamp()});
-      } else {
-        await addDoc(collection(db,"products"),{...data,createdAt:serverTimestamp()});
-      }
+      if(editP?.id){const{id,...r}=data;await updateDoc(doc(db,"products",editP.id),{...r,updatedAt:serverTimestamp()});}
+      else{await addDoc(collection(db,"products"),{...data,createdAt:serverTimestamp()});}
       setShowForm(false);setEditP(null);
     }catch(e){alert("Gagal simpan produk: "+e.message);}
     setSaving(false);
@@ -926,9 +838,7 @@ export default function App() {
 
   const handleDelete=async()=>{
     setSaving(true);
-    try{
-      await deleteDoc(doc(db,"products",delP.id));
-    }
+    try{await deleteDoc(doc(db,"products",delP.id));}
     catch(e){alert("Gagal hapus: "+e.message);}
     setDelP(null);setSaving(false);
   };
@@ -940,55 +850,44 @@ export default function App() {
       <style>{CSS}</style>
       <div className={`app ${dark?"dark":"light"}`}>
 
-        {/* ════ HEADER — stabil, tidak berubah lebar saat admin on/off ════ */}
+        {/* ── HEADER ── */}
         <header className="hdr">
           <div className="hinner">
-            {/* Logo */}
             <div className="logo">
               <span className="logo-dot"/>
               <span className="logo-txt">Katalog<em>Pro</em></span>
             </div>
-
-            {/* Kanan: mode toggle + burger menu */}
             <div className="hright">
-              <button type="button" className="icon-btn" onClick={()=>setDark(d=>!d)}
-                title={dark?"Mode Terang":"Mode Gelap"}>
+              <button type="button" className="icon-btn" onClick={()=>setDark(d=>!d)}>
                 {dark?<Ic.Sun/>:<Ic.Moon/>}
               </button>
-
-              {/* Tombol pesanan saya — selalu ada untuk user */}
-              {!isAdmin && (
-                <button type="button" className="icon-btn"
-                  onClick={()=>setShowMyOrders(true)}
-                  title="Pesanan & Chat Saya">
+              {/* Tombol pesanan saya — untuk user */}
+              {!isAdmin&&(
+                <button type="button" className="icon-btn" onClick={()=>setShowMyOrders(true)}>
                   <Ic.Chat/>
-                  {userOrdersStore.orders.length>0 &&
+                  {userOrdersStore.orders.length>0&&
                     <span className="notif-dot">{userOrdersStore.orders.length}</span>}
                 </button>
               )}
-              {/* Notif badge — hanya muncul kalau admin & ada notif */}
-              {isAdmin && (
+              {/* Notif admin */}
+              {isAdmin&&(
                 <button type="button" className="icon-btn notif-btn" onClick={()=>{setShowACP(true);closeMenu();}}>
                   <Ic.Bell/>
-                  {notifCnt>0 && <span className="notif-dot">{notifCnt}</span>}
+                  {notifCnt>0&&<span className="notif-dot">{notifCnt}</span>}
                 </button>
               )}
-
-              {/* Burger menu — SELALU ada, tidak geser layout */}
+              {/* Burger menu */}
               <div className="burger-wrap" ref={menuRef}>
                 <button type="button" className="icon-btn" onClick={()=>setMenuOpen(o=>!o)}>
                   <Ic.Menu/>
                 </button>
-
-                {menuOpen && (
+                {menuOpen&&(
                   <div className="dropdown">
-                    {!isAdmin ? (
-                      /* Menu untuk user biasa */
+                    {!isAdmin?(
                       <button type="button" className="dd-item" onClick={()=>{setShowLogin(true);closeMenu();}}>
                         <Ic.Admin/> Login Admin
                       </button>
-                    ) : (
-                      /* Menu untuk admin */
+                    ):(
                       <>
                         <div className="dd-label">Admin Panel</div>
                         <button type="button" className="dd-item gold" onClick={()=>{setEditP(null);setShowForm(true);closeMenu();}}>
@@ -1015,27 +914,25 @@ export default function App() {
           </div>
         </header>
 
-        {/* ════ HERO — ringkas, tanpa judul besar ════ */}
+        {/* ── HERO ── */}
         <section className="hero">
           <div className="hero-glow"/>
           <p className="hero-eye">Koleksi Parfum</p>
           <p className="hero-sub">{list.length} produk tersedia</p>
         </section>
 
-        {/* ════ GENDER TABS ════ */}
+        {/* ── TABS ── */}
         <div className="cats">
           {GENDERS.map(g=>(
-            <button key={g} type="button" className={`cat-btn${cat===g?" on":""}`}
-              onClick={()=>setCat(g)}>{g}</button>
+            <button key={g} type="button" className={`cat-btn${cat===g?" on":""}`} onClick={()=>setCat(g)}>{g}</button>
           ))}
         </div>
 
-        {/* ════ TOOLBAR ════ */}
+        {/* ── TOOLBAR ── */}
         <div className="toolbar">
           <div className="sbox">
             <Ic.Search/>
-            <input className="sinp" placeholder="Cari produk…" value={search}
-              onChange={e=>setSearch(e.target.value)}/>
+            <input className="sinp" placeholder="Cari produk…" value={search} onChange={e=>setSearch(e.target.value)}/>
             {search&&<button type="button" className="sclr" onClick={()=>setSearch("")}><Ic.Close/></button>}
           </div>
           <select className="ssel" value={sort} onChange={e=>setSort(e.target.value)}>
@@ -1048,7 +945,7 @@ export default function App() {
           </select>
         </div>
 
-        {/* ════ GRID ════ */}
+        {/* ── GRID ── */}
         <main className="main">
           {loading?(
             <div className="grid2">{[...Array(6)].map((_,i)=><div key={i} className="skel"/>)}</div>
@@ -1071,27 +968,27 @@ export default function App() {
 
         <footer className="ftr">© 2026 Katalog Parfum — By:Parevie</footer>
 
-        {/* ════ MODALS ════ */}
-        <Modal open={!!selected}   onClose={()=>setSelected(null)}>
+        {/* ── MODALS ── */}
+        <Modal open={!!selected}     onClose={()=>setSelected(null)}>
           {selected&&<ProductDetail p={selected} onOrder={p=>{setSelected(null);setOrderProd(p);}}/>}
         </Modal>
-        <Modal open={!!orderProd}  onClose={()=>setOrderProd(null)}>
+        <Modal open={!!orderProd}    onClose={()=>setOrderProd(null)}>
           {orderProd&&<OrderModal p={orderProd}/>}
         </Modal>
-        <Modal open={showForm}     onClose={()=>{setShowForm(false);setEditP(null);}}>
+        <Modal open={showForm}       onClose={()=>{setShowForm(false);setEditP(null);}}>
           <ProductForm initial={editP} onSave={handleSave} saving={saving}
             onCancel={()=>{setShowForm(false);setEditP(null);}}/>
         </Modal>
-        <Modal open={!!delP}       onClose={()=>setDelP(null)}>
+        <Modal open={!!delP}         onClose={()=>setDelP(null)}>
           {delP&&<ConfirmDelete p={delP} onConfirm={handleDelete} onCancel={()=>setDelP(null)} saving={saving}/>}
         </Modal>
-        <Modal open={showLogin}    onClose={()=>setShowLogin(false)}>
+        <Modal open={showLogin}      onClose={()=>setShowLogin(false)}>
           <AdminLogin onLogin={()=>{setIsAdmin(true);setShowLogin(false);}}/>
         </Modal>
-        <Modal open={showMyOrders} onClose={()=>setShowMyOrders(false)}>
-          <UserChatPanel onClose={()=>setShowMyOrders(false)}/>
+        <Modal open={showMyOrders}   onClose={()=>setShowMyOrders(false)}>
+          <UserChatPanel/>
         </Modal>
-        <Modal open={showACP}      onClose={()=>setShowACP(false)}>
+        <Modal open={showACP}        onClose={()=>setShowACP(false)}>
           <AdminChatPanel/>
         </Modal>
       </div>
@@ -1099,20 +996,14 @@ export default function App() {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// CSS
-// ══════════════════════════════════════════════════════════════════════════
+// ── CSS ───────────────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-
 .dark{--bg:#0d0d14;--bg2:#12121c;--bg3:#1e1e2c;--card:#16162288;--border:#ffffff13;--gold:#c9a84c;--gold2:#f0d080;--accent:#7c6af5;--red:#e05a5a;--green:#4caf82;--text:#f0ede8;--text2:#b0acbc;--text3:#62606c;--star-off:#333;--shd:0 8px 32px rgba(0,0,0,.55);--modal:#12121c;--hdr:rgba(13,13,20,.95);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c14 0%,transparent 70%)}
-.light{--bg:#f4f1eb;--bg2:#fff;--bg3:#e8e4da;--card:#ffffffd0;--border:#00000010;--gold:#9a6e18;--gold2:#c18a20;--accent:#5548cc;--red:#c03030;--green:#1e7a48;--text:#18160f;--text2:#48443c;--text3:#88847a;--star-off:#ccc;--shd:0 8px 28px rgba(0,0,0,.13);--modal:#fff;--hdr:rgba(244,241,235,.96);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c18 0%,transparent 70%)}
-
+.light{--bg:#f4f1eb;--bg2:#fff;--bg3:#e8e4da;--card:#ffffffd0;--border:#00000010;--gold:#9a6e18;--gold2:#c18a20;--accent:#5548cc;--red:#c03030;--green:#1e7a48;--text:#18160f;--text2:#48443c;--text3:#88847a;--star-off:#ccc;--shd:0 8px 28px rgba(0,0,0,.13);--modal:#fff;--hdr:rgba(244,241,235,.96);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c1a 0%,transparent 70%)}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;transition:background .25s,color .25s}
 .app{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
-
-/* ── HEADER — tinggi tetap, tidak bergeser ── */
 .hdr{position:sticky;top:0;z-index:100;background:var(--hdr);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
 .hinner{max-width:900px;margin:0 auto;padding:0 14px;height:52px;display:flex;align-items:center;justify-content:space-between}
 .logo{display:flex;align-items:center;gap:8px}
@@ -1120,14 +1011,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .logo-txt{font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .logo-txt em{color:var(--gold);font-style:italic}
 .hright{display:flex;align-items:center;gap:5px}
-
-/* Icon buttons — ukuran tetap */
 .icon-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0;position:relative}
 .icon-btn:hover{border-color:var(--gold);color:var(--gold)}
-.notif-btn{position:relative}
 .notif-dot{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;border-radius:9px;background:var(--red);color:#fff;font-size:.58rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 3px;border:2px solid var(--bg)}
-
-/* ── Burger dropdown ── */
 .burger-wrap{position:relative}
 .dropdown{position:absolute;top:calc(100% + 8px);right:0;min-width:200px;background:var(--modal);border:1px solid var(--border);border-radius:14px;box-shadow:var(--shd);overflow:hidden;z-index:200;animation:fadedown .18s ease}
 @keyframes fadedown{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
@@ -1139,21 +1025,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .dd-badge{margin-left:auto;min-width:18px;height:18px;border-radius:9px;background:var(--red);color:#fff;font-size:.62rem;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .dd-info{padding:8px 14px;background:var(--bg3);font-size:.74rem;color:var(--text3);display:flex;flex-direction:column;gap:3px}
 .dd-divider{height:1px;background:var(--border);margin:2px 0}
-
-/* ── HERO — ringkas ── */
-.hero{position:relative;overflow:hidden;padding:20px 16px 14px;text-align:center}
+.hero{position:relative;overflow:hidden;padding:18px 16px 12px;text-align:center}
 .hero-glow{position:absolute;inset:0;background:var(--hero-glow);pointer-events:none}
 .hero-eye{display:inline-block;padding:3px 14px;border:1px solid var(--gold);border-radius:18px;color:var(--gold);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
-.hero-sub{color:var(--text3);font-size:.84rem;margin-top:2px}
-
-/* ── GENDER TABS ── */
+.hero-sub{color:var(--text3);font-size:.84rem}
 .cats{display:flex;gap:6px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%}
 .cats::-webkit-scrollbar{display:none}
 .cat-btn{padding:6px 18px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;color:var(--text3);background:var(--bg3);white-space:nowrap;transition:all .2s;flex-shrink:0}
 .cat-btn:hover{border-color:var(--gold);color:var(--text2)}
 .cat-btn.on{background:var(--gold);color:#0d0d14;font-weight:700;border-color:var(--gold)}
-
-/* ── TOOLBAR ── */
 .toolbar{max-width:900px;margin:0 auto;padding:6px 14px 10px;display:flex;gap:8px;align-items:center}
 .sbox{flex:1;display:flex;align-items:center;gap:8px;padding:9px 13px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;transition:border-color .2s}
 .sbox:focus-within{border-color:var(--gold)}
@@ -1162,12 +1042,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sinp::placeholder{color:var(--text3)}
 .sclr{background:none;border:none;cursor:pointer;color:var(--text3);display:flex;padding:0}
 .ssel{padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:.82rem;cursor:pointer;outline:none;flex-shrink:0}
-
-/* ── MAIN ── */
 .main{flex:1;max-width:900px;margin:0 auto;padding:6px 12px 48px;width:100%}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-
-/* ── CARD ── */
 .card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;transition:transform .2s,box-shadow .2s,border-color .2s;position:relative;backdrop-filter:blur(8px)}
 .card:hover{border-color:#c9a84c55;transform:translateY(-3px);box-shadow:var(--shd)}
 .card-img-wrap{position:relative;overflow:hidden;aspect-ratio:1/1}
@@ -1193,8 +1069,10 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .rnum{font-size:.68rem;color:var(--text3);margin-left:3px}
 .card-foot{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap}
 .card-price{font-size:.88rem;font-weight:700;color:var(--gold)}
+/* stok pill — 3 warna: hijau normal, merah tipis, merah gelap habis */
 .spill{padding:2px 7px;border-radius:5px;font-size:.63rem;font-weight:500;background:#4caf8220;color:var(--green);border:1px solid #4caf8230;white-space:nowrap}
 .spill.low{background:#e05a5a20;color:var(--red);border-color:#e05a5a30}
+.spill.out{background:#e05a5a;color:#fff;border-color:#e05a5a}
 .spill.sold{background:#7c6af520;color:var(--accent);border-color:#7c6af530}
 .card-sold{font-size:.65rem;color:var(--text3);margin-top:3px}
 .skel{border-radius:12px;aspect-ratio:3/4;background:linear-gradient(90deg,var(--bg3) 25%,var(--bg2) 50%,var(--bg3) 75%);background-size:200% 100%;animation:shim 1.4s infinite}
@@ -1203,16 +1081,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .empty h3{font-family:'Playfair Display',serif;font-size:1.2rem;margin:10px 0 6px;color:var(--text)}
 .empty p{color:var(--text3);font-size:.85rem}
 .ftr{text-align:center;padding:18px;border-top:1px solid var(--border);color:var(--text3);font-size:.76rem}
-
-/* ── MODAL ── */
 .overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);display:flex;align-items:flex-end;justify-content:center}
 .modal-box{background:var(--modal);border:1px solid var(--border);border-radius:20px 20px 0 0;width:100%;max-width:900px;max-height:90vh;overflow-y:auto;position:relative;box-shadow:var(--shd);scrollbar-width:thin;scrollbar-color:var(--border) transparent;animation:slideup .25s ease}
 @keyframes slideup{from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-handle{width:40px;height:4px;border-radius:2px;background:var(--border);margin:10px auto 0}
 .modal-close{position:absolute;top:10px;right:12px;width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--bg3);color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:5;transition:all .2s}
 .modal-close:hover{border-color:var(--red);color:var(--red)}
-
-/* ── DETAIL ── */
 .detail{display:flex;flex-direction:column;width:100%}
 .d-img-wrap{width:100%;overflow:hidden;background:var(--bg3);line-height:0;position:relative}
 .d-img{width:100%;max-height:320px;object-fit:contain;display:block}
@@ -1230,16 +1104,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-order{width:100%;padding:13px;border-radius:10px;border:none;background:var(--gold);color:#0d0d14;font-weight:700;font-size:.9rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;margin-top:6px}
 .btn-order:hover:not(.disabled){background:var(--gold2)}
 .btn-order.disabled{background:var(--bg3);color:var(--text3);cursor:not-allowed;border:1px solid var(--border)}
-
-/* ── ORDER ── */
 .ord-wrap{padding:16px}
 .ord-hdr{display:flex;gap:12px;align-items:center;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px}
 .ord-thumb{width:64px;height:64px;object-fit:cover;border-radius:8px;flex-shrink:0}
 .ord-pname{font-family:'Playfair Display',serif;font-size:1rem;color:var(--text);margin-bottom:4px}
 .ord-price{font-weight:700;color:var(--gold);font-size:.95rem}
 .ord-body{display:flex;flex-direction:column;gap:12px}
-/* GPS button */
-.btn-loc{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;border:1px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif;margin-top:6px;transition:all .2s;-webkit-tap-highlight-color:transparent}
+.btn-loc{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:8px;border:1px solid var(--gold);background:transparent;color:var(--gold);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif;margin-top:6px;transition:all .2s}
 .btn-loc:hover,.btn-loc:active{background:#c9a84c18}
 .btn-loc.loading{opacity:.7;cursor:wait}
 .btn-loc.done{border-color:var(--green);color:var(--green);background:#4caf8210}
@@ -1247,91 +1118,37 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .loc-msg.ok{color:var(--green)}
 .loc-msg.err{color:var(--red)}
 .ord-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.8rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-
-/* ── QRIS ── */
 .qris-head{display:flex;align-items:center;gap:8px;padding:16px 16px 0;font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .qris-body{padding:16px;text-align:center}
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
 .qris-img-wrap{width:220px;height:220px;margin:0 auto 16px;border-radius:14px;overflow:hidden;border:2px solid var(--gold);background:var(--bg3);display:flex;align-items:center;justify-content:center}
 .qris-img{width:100%;height:100%;object-fit:contain}
-.qris-note{font-size:.72rem;color:var(--red);text-align:center;margin-bottom:12px;padding:6px 10px;background:#e05a5a15;border-radius:8px;border:1px solid #e05a5a30}
 .qris-steps{text-align:left;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px;font-size:.82rem;color:var(--text2);line-height:2}
-
 /* ── CHAT ── */
 .chat-wrap{display:flex;flex-direction:column;height:480px}
 .chat-hdr{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text);flex-shrink:0}
 .chat-status{margin-left:auto;font-size:.72rem;color:var(--green)}
 .chat-info{padding:7px 16px;background:var(--bg3);font-size:.74rem;color:var(--text3);border-bottom:1px solid var(--border);flex-shrink:0}
+.status-bar{padding:7px 16px;font-size:.78rem;font-weight:600;border-bottom:1px solid;flex-shrink:0}
 .chat-msgs{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
 .chat-empty{text-align:center;color:var(--text3);font-size:.83rem;margin:auto;padding:20px}
 .cmsg{display:flex;flex-direction:column;gap:2px}
 .cmsg.right{align-items:flex-end}
 .cmsg.left{align-items:flex-start}
 .cmsg.center{align-items:center}
+/* Bubble admin (kanan, gold) vs buyer (kiri, abu) */
 .cbubble{max-width:78%;padding:9px 13px;border-radius:14px;font-size:.84rem;line-height:1.5;word-break:break-word}
-.cmsg.right .cbubble{background:var(--gold);color:#0d0d14;border-radius:14px 14px 4px 14px}
-.cmsg.left  .cbubble{background:var(--bg3);color:var(--text);border-radius:14px 14px 14px 4px}
-.csys{font-size:.75rem;color:var(--text3);background:var(--bg3);padding:6px 12px;border-radius:10px;text-align:center;max-width:85%}
-.ctime{font-size:.64rem;color:var(--text3)}
+.bubble-admin{background:var(--gold);color:#0d0d14;border-radius:14px 14px 4px 14px}
+.bubble-buyer{background:var(--bg3);color:var(--text);border-radius:14px 14px 14px 4px;border:1px solid var(--border)}
+.csys{font-size:.75rem;color:var(--text3);background:var(--bg3);padding:6px 12px;border-radius:10px;text-align:center;max-width:85%;border:1px solid var(--border)}
+.ctime{font-size:.64rem;color:var(--text3);margin-top:1px}
 .chat-inp-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
 .btn-send{width:40px;height:40px;border-radius:10px;border:none;background:var(--gold);color:#0d0d14;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
 .btn-send:hover{background:var(--gold2)}
-
-/* ── ADMIN PANEL ── */
-.acp{padding:16px;min-height:380px}
-.acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:14px;display:flex;align-items:center;gap:7px;color:var(--text)}
-.acp-list{display:flex;flex-direction:column;gap:8px}
-.acp-item{display:flex;justify-content:space-between;gap:10px;padding:12px;background:var(--bg3);border-radius:10px;cursor:pointer;border:1px solid var(--border);transition:border-color .2s}
-.acp-item:hover{border-color:var(--gold)}
-.acp-pname{font-weight:600;font-size:.88rem;color:var(--text);margin-bottom:2px}
-.acp-buyer{font-size:.78rem;color:var(--text2);margin-bottom:2px}
-.acp-addr{font-size:.72rem;color:var(--text3)}
-.acp-price{font-weight:700;color:var(--gold);font-size:.85rem;margin-bottom:4px}
-.acp-status{font-size:.7rem;font-weight:700;text-transform:uppercase}
-.acp-detail{display:flex;flex-direction:column;gap:10px}
-.btn-back{align-self:flex-start;padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif;transition:all .2s}
-.btn-back:hover{background:var(--bg3)}
-.acp-order-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-.acp-status-row{display:flex;gap:5px;flex-wrap:wrap}
-.btn-status{padding:4px 10px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;text-transform:capitalize}
-.btn-status:hover{border-color:var(--gold);color:var(--gold)}
-.btn-status.on{background:var(--gold);border-color:var(--gold);color:#0d0d14;font-weight:700}
-
-/* ── FORM ── */
-.pform{padding:18px}
-.pform-ttl{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:14px;color:var(--text)}
-.pform-imgs{display:flex;gap:10px;margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:10px;flex-wrap:wrap}
-.pform-prev{width:80px;height:80px;object-fit:cover;border-radius:8px;flex-shrink:0;border:1px solid var(--border)}
-.pform-imgctl{flex:1;min-width:150px;display:flex;flex-direction:column;gap:6px}
-.btn-upload{display:flex;align-items:center;gap:5px;padding:6px 11px;border:1px dashed var(--border);border-radius:7px;cursor:pointer;color:var(--text2);font-size:.76rem;width:fit-content;transition:all .2s}
-.btn-upload:hover{border-color:var(--gold);color:var(--gold)}
-.url-row{display:flex;gap:5px}
-.btn-addurl{padding:6px 11px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--gold);cursor:pointer;font-size:.95rem;transition:all .2s}
-.btn-addurl:hover{background:var(--gold);color:#0d0d14}
-.pform-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.fg{display:flex;flex-direction:column;gap:4px}
-.fg label{font-size:.74rem;color:var(--text3);font-weight:500}
-.finput{padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);color:var(--text);font-family:'DM Sans',sans-serif;font-size:.84rem;outline:none;transition:border-color .2s;width:100%}
-.finput:focus{border-color:var(--gold)}
-.finput.err{border-color:var(--red);animation:shake .3s}
-@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
-.ftarea{resize:vertical;min-height:80px}
-.pform-checks{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
-.chk{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text2);cursor:pointer}
-.form-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-.btn-cancel{padding:9px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.84rem;transition:all .2s}
-.btn-cancel:hover{background:var(--bg3)}
-.btn-save{padding:9px 20px;border-radius:8px;border:none;background:var(--gold);color:#0d0d14;font-weight:700;font-size:.84rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
-.btn-save:hover:not(:disabled){background:var(--gold2)}
-.btn-save:disabled,.btn-del:disabled{opacity:.5;cursor:not-allowed}
-.btn-del{padding:9px 20px;border-radius:8px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:.84rem;cursor:pointer;font-family:'DM Sans',sans-serif}
-.alog{padding:28px 20px;text-align:center}
-.alog-ico{width:46px;height:46px;border-radius:12px;background:#c9a84c18;border:1px solid var(--gold);color:var(--gold);display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
-.alog h3{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:6px;color:var(--text)}
-.alog p{color:var(--text3);margin-bottom:12px;font-size:.83rem}
-.errmsg{color:var(--red);font-size:.76rem;margin-top:5px}
-.cbox{padding:26px 20px;text-align:center}
-.cbox h3{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:10px;color:var(--text)}
-.cbox p{color:var(--text2);margin-bottom:20px;font-size:.85rem;line-height:1.6}
-@media(max-width:400px){.grid2{gap:7px}.pform-grid{grid-template-columns:1fr}}
-`;
+.btn-back-chat{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1rem;padding:0 4px;transition:opacity .2s}
+.msg-del-btn{width:22px;height:22px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:all .2s;flex-shrink:0}
+.cmsg:hover .msg-del-btn{opacity:1}
+.msg-del-btn:hover{background:var(--red);color:#fff}
+.del-confirm-bar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#e05a5a18;border-top:1px solid #e05a5a33;font-size:.8rem;color:var(--text2)}
+.del-confirm-bar span{flex:1}
+.btn-yes-del{padding:4px 12px;border-radius:6px;border:none;background:var(--red);color:#fff;fon
