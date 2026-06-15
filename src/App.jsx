@@ -1099,7 +1099,7 @@ export default function App() {
 }
 
 // ── CSS ───────────────────────────────────────────────────────────────────
-const CSS =`
+const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 .dark{--bg:#0d0d14;--bg2:#12121c;--bg3:#1e1e2c;--card:#16162288;--border:#ffffff13;--gold:#c9a84c;--gold2:#f0d080;--accent:#7c6af5;--red:#e05a5a;--green:#4caf82;--text:#f0ede8;--text2:#b0acbc;--text3:#62606c;--star-off:#333;--shd:0 8px 32px rgba(0,0,0,.55);--modal:#12121c;--hdr:rgba(13,13,20,.95);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c14 0%,transparent 70%)}
