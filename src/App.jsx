@@ -5,6 +5,7 @@ import {
   doc, onSnapshot, serverTimestamp, query, orderBy, where, getDoc
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import toast, { Toaster } from 'react-hot-toast';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -133,7 +134,6 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
         {p.rating>0&&<Stars val={p.rating}/>}
         <div className="card-foot">
           <span className="card-price">{fRp(p.price)}</span>
-          {/* stok realtime — warna otomatis merah jika < 10 */}
           <span className={`spill${stok===0?" out":stok<10?" low":""}`}>
             {stok===0?"Habis":`${stok} stok`}
           </span>
@@ -192,6 +192,15 @@ function OrderModal({p}) {
       },
       {enableHighAccuracy:true,timeout:12000,maximumAge:0}
     );
+  };
+
+  const saveMyOrder = (orderId, productName, productImg, price) => {
+    const existing = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
+    if (!existing.find(o => o.orderId === orderId)) {
+      const newOrder = { orderId, productName, productImg, price, status: 'pending' };
+      existing.unshift(newOrder);
+      localStorage.setItem('parevie_my_orders', JSON.stringify(existing));
+    }
   };
 
   const submitOrder = async () => {
@@ -351,51 +360,109 @@ function OrderModal({p}) {
   );
 }
 
-// ─── In-memory store pesanan user ─────────────────────────────────────────
-const userOrdersStore = { orders: [] };
-const saveMyOrder = (orderId, productName, productImg, price) => {
-  if (!userOrdersStore.orders.find(o=>o.orderId===orderId))
-    userOrdersStore.orders.unshift({orderId,productName,productImg,price});
-};
-
-// ─── USER CHAT PANEL ──────────────────────────────────────────────────────
+// ─── USER CHAT PANEL (dengan real-time listener & notifikasi) ─────────────
 function UserChatPanel() {
   const [selOrd, setSelOrd] = useState(null);
   const [msgs,   setMsgs]   = useState([]);
   const [txt,    setTxt]    = useState("");
   const [ordData,setOrdData]= useState(null);
+  const [myOrders, setMyOrders] = useState([]);
   const chatRef = useRef(null);
-  const myOrders = userOrdersStore.orders;
 
-  useEffect(()=>{
-    if (!selOrd) return;
-    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
-    const u1=onSnapshot(q,snap=>{
-      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
+  // Load orders from localStorage & sync with Firestore status
+  useEffect(() => {
+    const stored = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
+    setMyOrders(stored);
+  }, []);
+
+  // Real-time listener untuk setiap order (update status & notifikasi)
+  useEffect(() => {
+    if (myOrders.length === 0) return;
+    const unsubs = myOrders.map(order => {
+      const orderRef = doc(db, "orders", order.orderId);
+      return onSnapshot(orderRef, (snap) => {
+        if (snap.exists()) {
+          const newStatus = snap.data().status;
+          const oldStatus = order.status;
+          if (oldStatus && newStatus !== oldStatus) {
+            // Tampilkan notifikasi toast
+            const statusMsg = {
+              pending: "⏳ Pesanan menunggu konfirmasi",
+              paid_pending_confirm: "💰 Pembayaran diterima, menunggu admin",
+              confirmed: "✅ Pesanan dikonfirmasi! Sedang disiapkan",
+              shipped: "🚚 Pesanan sedang dalam perjalanan",
+              done: "🎉 Pesanan selesai! Terima kasih",
+              cancelled: "❌ Pesanan dibatalkan"
+            };
+            toast.success(`${order.productName}\n${statusMsg[newStatus] || newStatus}`, {
+              id: `status-${order.orderId}`,
+              icon: '📦',
+              duration: 5000
+            });
+            // Update status di localStorage
+            const updated = myOrders.map(o => 
+              o.orderId === order.orderId ? { ...o, status: newStatus } : o
+            );
+            localStorage.setItem('parevie_my_orders', JSON.stringify(updated));
+            setMyOrders(updated);
+            // Jika order yang sedang dibuka, update ordData
+            if (selOrd === order.orderId) {
+              setOrdData(prev => ({ ...prev, status: newStatus }));
+            }
+          } else if (!oldStatus) {
+            // first load, simpan status awal
+            const updated = myOrders.map(o =>
+              o.orderId === order.orderId ? { ...o, status: newStatus } : o
+            );
+            localStorage.setItem('parevie_my_orders', JSON.stringify(updated));
+            setMyOrders(updated);
+          }
+        } else {
+          // Pesanan dihapus admin
+          const filtered = myOrders.filter(o => o.orderId !== order.orderId);
+          localStorage.setItem('parevie_my_orders', JSON.stringify(filtered));
+          setMyOrders(filtered);
+          toast.error(`Pesanan ${order.productName} telah dihapus admin`, { id: `del-${order.orderId}` });
+          if (selOrd === order.orderId) setSelOrd(null);
+        }
+      });
     });
-    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{ if(snap.exists()) setOrdData(snap.data()); });
-    return ()=>{ u1(); u2(); };
-  },[selOrd]);
+    return () => unsubs.forEach(unsub => unsub());
+  }, [myOrders.map(o => o.orderId).join(',')]); // eslint-disable-line
+
+  // Chat listener untuk order yang dipilih
+  useEffect(() => {
+    if (!selOrd) return;
+    const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
+    const unsubChat = onSnapshot(q, snap => {
+      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
+    });
+    const unsubOrder = onSnapshot(doc(db, "orders", selOrd), snap => {
+      if (snap.exists()) setOrdData(snap.data());
+      else setSelOrd(null);
+    });
+    return () => { unsubChat(); unsubOrder(); };
+  }, [selOrd]);
 
   const sendChat = async () => {
-    if (!txt.trim()||!selOrd) return;
+    if (!txt.trim() || !selOrd) return;
     try {
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{from:"buyer",text:txt.trim(),createdAt:serverTimestamp()});
+      await addDoc(collection(db, `orders/${selOrd}/chats`), { from: "buyer", text: txt.trim(), createdAt: serverTimestamp() });
       setTxt("");
-    } catch(e){ alert("Gagal: "+e.message); }
+    } catch (e) { alert("Gagal: " + e.message); }
   };
 
-  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
-    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
-  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
-    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+  const SL = { pending: "⏳ Menunggu konfirmasi", paid_pending_confirm: "💰 Pembayaran diverifikasi",
+    confirmed: "✅ Dikonfirmasi", shipped: "🚚 Dalam pengiriman", done: "🎉 Selesai", cancelled: "❌ Dibatalkan" };
+  const SC = { pending: "#c9a84c", paid_pending_confirm: "#7c6af5", confirmed: "#4caf82",
+    shipped: "#29b6f6", done: "#4caf82", cancelled: "#e05a5a" };
 
-  if (myOrders.length===0) return (
+  if (myOrders.length === 0) return (
     <div className="acp">
       <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-      <div className="empty" style={{padding:"40px 16px"}}>
-        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
+      <div className="empty" style={{ padding: "40px 16px" }}>
+        <p style={{ fontSize: "2rem" }}>🛒</p><h3>Belum ada pesanan</h3>
         <p>Pesanan akan muncul setelah checkout</p>
       </div>
     </div>
@@ -405,48 +472,54 @@ function UserChatPanel() {
     <div className="acp">
       <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
       <div className="acp-list">
-        {myOrders.map(o=>(
-          <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
-            <img src={o.productImg||IMG_PH} alt={o.productName}
-              style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
-              onError={e=>{e.target.src=IMG_PH;}}/>
-            <div style={{flex:1,minWidth:0}}>
-              <p className="acp-pname">{o.productName}</p>
-              <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
+        {myOrders.map(o => {
+          const status = o.status || 'pending';
+          return (
+            <div key={o.orderId} className="acp-item" onClick={() => setSelOrd(o.orderId)}>
+              <img src={o.productImg || IMG_PH} alt={o.productName}
+                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+                onError={e => { e.target.src = IMG_PH; }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p className="acp-pname">{o.productName}</p>
+                <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
+                <span className="acp-status" style={{ color: SC[status], fontSize: ".7rem", fontWeight: 600 }}>
+                  {SL[status] || status}
+                </span>
+              </div>
+              <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>Chat →</span>
             </div>
-            <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 
-  const status = ordData?.status||"pending";
-  const found  = myOrders.find(o=>o.orderId===selOrd);
+  const status = ordData?.status || "pending";
+  const found = myOrders.find(o => o.orderId === selOrd);
   return (
     <div className="chat-wrap">
       <div className="chat-hdr">
-        <button type="button" onClick={()=>setSelOrd(null)} className="btn-back-chat">←</button>
-        <Ic.Chat/> <span>{found?.productName}</span>
+        <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
+        <Ic.Chat /> <span>{found?.productName}</span>
       </div>
-      <div className="status-bar" style={{background:SC[status]+"22",borderColor:SC[status]+"55",color:SC[status]}}>
-        {SL[status]||status}
+      <div className="status-bar" style={{ background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status] }}>
+        {SL[status] || status}
       </div>
       <div className="chat-msgs" ref={chatRef}>
-        {msgs.map(m=>(
-          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
-            {m.from==="system"
-              ?<div className="csys">{m.text}</div>
-              :<><div className={`cbubble ${m.from==="buyer"?"bubble-buyer":"bubble-admin"}`}>{m.text}</div>
-                <span className="ctime">{m.from==="buyer"?"Saya":"👤 Admin"}</span></>}
+        {msgs.map(m => (
+          <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
+            {m.from === "system"
+              ? <div className="csys">{m.text}</div>
+              : <><div className={`cbubble ${m.from === "buyer" ? "bubble-buyer" : "bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from === "buyer" ? "Saya" : "👤 Admin"}</span></>}
           </div>
         ))}
       </div>
       <div className="chat-inp-row">
-        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
-          value={txt} onChange={e=>setTxt(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
-        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
+        <input className="finput" style={{ flex: 1 }} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e => setTxt(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && sendChat()} />
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send /></button>
       </div>
     </div>
   );
@@ -458,7 +531,7 @@ function AdminChatPanel() {
   const [selOrd,  setSelOrd]  = useState(null);
   const [msgs,    setMsgs]    = useState([]);
   const [txt,     setTxt]     = useState("");
-  const [delConf, setDelConf] = useState(null); // id pesan yang mau dihapus
+  const [delConf, setDelConf] = useState(null);
   const chatRef = useRef(null);
 
   useEffect(()=>{
@@ -475,14 +548,12 @@ function AdminChatPanel() {
     });
   },[selOrd]);
 
-  // Listener realtime untuk status pesanan yang sedang dibuka
   useEffect(()=>{
     if (!selOrd?.id) return;
     const unsub = onSnapshot(doc(db,"orders",selOrd.id), snap=>{
       if (snap.exists()) {
         setSelOrd(prev=>({...prev, ...snap.data(), id:snap.id}));
       } else {
-        // Pesanan dihapus dari luar
         setSelOrd(null);
       }
     });
@@ -506,10 +577,8 @@ function AdminChatPanel() {
         status: s,
         updatedAt: serverTimestamp(),
       });
-      // Update state lokal langsung agar tombol status sinkron
       setSelOrd(o=>({...o, status:s}));
 
-      // Kurangi stok produk saat status = confirmed
       if (s === "confirmed" && selOrd.productId) {
         try {
           const prodRef = doc(db,"products",selOrd.productId);
@@ -523,7 +592,6 @@ function AdminChatPanel() {
         } catch(e){ console.warn("Gagal kurangi stok:",e.message); }
       }
 
-      // Kirim notifikasi status ke chat buyer
       const statusMsg = {
         confirmed: "✅ Pesanan dikonfirmasi! Sedang disiapkan untuk dikirim.",
         shipped:   "🚚 Pesanan sedang dalam perjalanan ke alamatmu!",
@@ -593,7 +661,6 @@ function AdminChatPanel() {
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
           </div>
 
-          {/* Status buttons */}
           <div className="acp-status-row">
             {Object.entries(SL).map(([k,v])=>(
               <button key={k} type="button"
@@ -603,7 +670,6 @@ function AdminChatPanel() {
             ))}
           </div>
 
-          {/* Chat — admin kanan (gold), buyer kiri (abu) */}
           <div className="chat-msgs" ref={chatRef} style={{height:220}}>
             {msgs.map(m=>(
               <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
@@ -612,7 +678,6 @@ function AdminChatPanel() {
                   :<div style={{display:"flex",flexDirection:"column",alignItems:m.from==="admin"?"flex-end":"flex-start",gap:2}}>
                     <div style={{display:"flex",alignItems:"flex-end",gap:4,flexDirection:m.from==="admin"?"row-reverse":"row"}}>
                       <div className={`cbubble ${m.from==="admin"?"bubble-admin":"bubble-buyer"}`}>{m.text}</div>
-                      {/* Tombol hapus pesan — hanya admin yang lihat */}
                       <button type="button" className="msg-del-btn"
                         onClick={()=>setDelConf(m.id)} title="Hapus pesan">
                         <Ic.Trash/>
@@ -625,7 +690,6 @@ function AdminChatPanel() {
             ))}
           </div>
 
-          {/* Konfirmasi hapus pesan */}
           {delConf&&(
             <div className="del-confirm-bar">
               <span>Hapus pesan ini?</span>
@@ -836,7 +900,6 @@ export default function App() {
   // Notif badge admin — hitung dari orders yang belum diproses (realtime)
   useEffect(()=>{
     if(!isAdmin) return;
-    // Count orders yang status pending atau paid_pending_confirm
     const q=query(collection(db,"orders"),
       where("status","in",["pending","paid_pending_confirm"]));
     return onSnapshot(q,s=>setNotifCnt(s.size));
@@ -884,6 +947,7 @@ export default function App() {
     <>
       <style>{CSS}</style>
       <div className={`app ${dark?"dark":"light"}`}>
+        <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: 'var(--bg2)', color: 'var(--text)' } }} />
 
         {/* ── HEADER ── */}
         <header className="hdr">
@@ -896,12 +960,15 @@ export default function App() {
               <button type="button" className="icon-btn" onClick={()=>setDark(d=>!d)}>
                 {dark?<Ic.Sun/>:<Ic.Moon/>}
               </button>
-              {/* Tombol pesanan saya — untuk user */}
+              {/* Tombol pesanan saya — untuk user dengan badge notifikasi */}
               {!isAdmin&&(
                 <button type="button" className="icon-btn" onClick={()=>setShowMyOrders(true)}>
                   <Ic.Chat/>
-                  {userOrdersStore.orders.length>0&&
-                    <span className="notif-dot">{userOrdersStore.orders.length}</span>}
+                  {(() => {
+                    const orders = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
+                    const pendingCount = orders.filter(o => o.status && !['done', 'cancelled'].includes(o.status)).length;
+                    return pendingCount > 0 && <span className="notif-dot">{pendingCount}</span>;
+                  })()}
                 </button>
               )}
               {/* Notif admin */}
@@ -1032,7 +1099,7 @@ export default function App() {
 }
 
 // ── CSS ───────────────────────────────────────────────────────────────────
-const CSS = `
+const CSS = \`
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 .dark{--bg:#0d0d14;--bg2:#12121c;--bg3:#1e1e2c;--card:#16162288;--border:#ffffff13;--gold:#c9a84c;--gold2:#f0d080;--accent:#7c6af5;--red:#e05a5a;--green:#4caf82;--text:#f0ede8;--text2:#b0acbc;--text3:#62606c;--star-off:#333;--shd:0 8px 32px rgba(0,0,0,.55);--modal:#12121c;--hdr:rgba(13,13,20,.95);--hero-glow:radial-gradient(ellipse 80% 50% at 50% 0%,#c9a84c14 0%,transparent 70%)}
@@ -1104,7 +1171,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .rnum{font-size:.68rem;color:var(--text3);margin-left:3px}
 .card-foot{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap}
 .card-price{font-size:.88rem;font-weight:700;color:var(--gold)}
-/* stok pill — 3 warna: hijau normal, merah tipis, merah gelap habis */
 .spill{padding:2px 7px;border-radius:5px;font-size:.63rem;font-weight:500;background:#4caf8220;color:var(--green);border:1px solid #4caf8230;white-space:nowrap}
 .spill.low{background:#e05a5a20;color:var(--red);border-color:#e05a5a30}
 .spill.out{background:#e05a5a;color:#fff;border-color:#e05a5a}
@@ -1159,7 +1225,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .qris-img-wrap{width:220px;height:220px;margin:0 auto 16px;border-radius:14px;overflow:hidden;border:2px solid var(--gold);background:var(--bg3);display:flex;align-items:center;justify-content:center}
 .qris-img{width:100%;height:100%;object-fit:contain}
 .qris-steps{text-align:left;padding:12px;background:var(--bg3);border-radius:10px;margin-bottom:16px;font-size:.82rem;color:var(--text2);line-height:2}
-/* ── CHAT ── */
 .chat-wrap{display:flex;flex-direction:column;height:480px}
 .chat-hdr{display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--border);font-weight:600;color:var(--text);flex-shrink:0}
 .chat-status{margin-left:auto;font-size:.72rem;color:var(--green)}
@@ -1171,7 +1236,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cmsg.right{align-items:flex-end}
 .cmsg.left{align-items:flex-start}
 .cmsg.center{align-items:center}
-/* Bubble admin (kanan, gold) vs buyer (kiri, abu) */
 .cbubble{max-width:78%;padding:9px 13px;border-radius:14px;font-size:.84rem;line-height:1.5;word-break:break-word}
 .bubble-admin{background:var(--gold);color:#0d0d14;border-radius:14px 14px 4px 14px}
 .bubble-buyer{background:var(--bg3);color:var(--text);border-radius:14px 14px 14px 4px;border:1px solid var(--border)}
@@ -1243,4 +1307,4 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cbox h3{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:10px;color:var(--text)}
 .cbox p{color:var(--text2);margin-bottom:20px;font-size:.85rem;line-height:1.6}
 @media(max-width:400px){.grid2{gap:7px}.pform-grid{grid-template-columns:1fr}}
-`;
+\`;
