@@ -1307,4 +1307,4 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cbox h3{font-family:'Playfair Display',serif;font-size:1.15rem;margin-bottom:10px;color:var(--text)}
 .cbox p{color:var(--text2);margin-bottom:20px;font-size:.85rem;line-height:1.6}
 @media(max-width:400px){.grid2{gap:7px}.pform-grid{grid-template-columns:1fr}}
-\`;
+`;
