@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc,
-  doc, onSnapshot, serverTimestamp, query, orderBy, where
+  doc, onSnapshot, serverTimestamp, query, orderBy, where, getDoc
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
@@ -475,6 +475,20 @@ function AdminChatPanel() {
     });
   },[selOrd]);
 
+  // Listener realtime untuk status pesanan yang sedang dibuka
+  useEffect(()=>{
+    if (!selOrd?.id) return;
+    const unsub = onSnapshot(doc(db,"orders",selOrd.id), snap=>{
+      if (snap.exists()) {
+        setSelOrd(prev=>({...prev, ...snap.data(), id:snap.id}));
+      } else {
+        // Pesanan dihapus dari luar
+        setSelOrd(null);
+      }
+    });
+    return ()=>unsub();
+  },[selOrd?.id]);
+
   const send = async () => {
     if (!txt.trim()||!selOrd) return;
     try {
@@ -488,18 +502,37 @@ function AdminChatPanel() {
   const updStatus = async (s) => {
     if (!selOrd) return;
     try {
-      await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
-      setSelOrd(o=>({...o,status:s}));
-      // Kirim pesan sistem ke buyer
+      await updateDoc(doc(db,"orders",selOrd.id),{
+        status: s,
+        updatedAt: serverTimestamp(),
+      });
+      // Update state lokal langsung agar tombol status sinkron
+      setSelOrd(o=>({...o, status:s}));
+
+      // Kurangi stok produk saat status = confirmed
+      if (s === "confirmed" && selOrd.productId) {
+        try {
+          const prodRef = doc(db,"products",selOrd.productId);
+          const prodSnap = await getDoc(prodRef);
+          if (prodSnap.exists()) {
+            const curStok = Number(prodSnap.data().stock ?? prodSnap.data().size ?? 0);
+            if (curStok > 0) {
+              await updateDoc(prodRef,{ stock: curStok - 1, updatedAt: serverTimestamp() });
+            }
+          }
+        } catch(e){ console.warn("Gagal kurangi stok:",e.message); }
+      }
+
+      // Kirim notifikasi status ke chat buyer
       const statusMsg = {
-        confirmed:"✅ Pesanan kamu sudah dikonfirmasi admin! Sedang disiapkan.",
-        shipped:"🚚 Pesanan kamu sedang dalam pengiriman!",
-        done:"🎉 Pesanan selesai! Terima kasih sudah berbelanja.",
-        cancelled:"❌ Pesanan dibatalkan. Hubungi admin untuk info lebih lanjut.",
+        confirmed: "✅ Pesanan dikonfirmasi! Sedang disiapkan untuk dikirim.",
+        shipped:   "🚚 Pesanan sedang dalam perjalanan ke alamatmu!",
+        done:      "🎉 Pesanan selesai! Terima kasih sudah berbelanja di Parevie 💛",
+        cancelled: "❌ Pesanan dibatalkan. Hubungi admin untuk info lebih lanjut.",
       };
       if (statusMsg[s]) {
         await addDoc(collection(db,`orders/${selOrd.id}/chats`),{
-          from:"system",text:statusMsg[s],createdAt:serverTimestamp(),
+          from:"system", text:statusMsg[s], createdAt:serverTimestamp(),
         });
       }
     } catch(e){ alert("Gagal update status: "+e.message); }
@@ -800,10 +833,12 @@ export default function App() {
     return ()=>u();
   },[]);
 
-  // Notif badge admin
+  // Notif badge admin — hitung dari orders yang belum diproses (realtime)
   useEffect(()=>{
     if(!isAdmin) return;
-    const q=query(collection(db,"notifications"),where("read","==",false));
+    // Count orders yang status pending atau paid_pending_confirm
+    const q=query(collection(db,"orders"),
+      where("status","in",["pending","paid_pending_confirm"]));
     return onSnapshot(q,s=>setNotifCnt(s.size));
   },[isAdmin]);
 
