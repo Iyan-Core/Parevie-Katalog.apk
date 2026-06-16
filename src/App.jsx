@@ -344,28 +344,39 @@ function OrderModal({p}) {
         <span className="chat-status">● Online</span></div>
       <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}</div>
       
-      {status === "done" && !confirmed && (
+     // ─── Di dalam return, setelah status-bar ──────────────────────────────
+
+{status === "done" && !ordData?.buyerConfirmed && (
   <div style={{ padding: "8px 16px", textAlign: "center" }}>
     <button 
       className="btn-order" 
       style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
       onClick={async () => {
+        // Update Firestore: tandai buyer sudah konfirmasi
+        await updateDoc(doc(db, "orders", selOrd), {
+          buyerConfirmed: true,
+          confirmedAt: serverTimestamp()
+        });
+        // Kirim pesan ke chat
         await addDoc(collection(db, `orders/${selOrd}/chats`), {
           from: "system",
           text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
           createdAt: serverTimestamp()
         });
         toast.success("Terima kasih! Pesanan selesai.");
-        setConfirmed(true); // hilangkan tombol
       }}
     >
       ✅ Saya Sudah Menerima Pesanan
     </button>
   </div>
 )}
-{status === "done" && confirmed && (
+{status === "done" && ordData?.buyerConfirmed && (
   <div style={{ padding: "8px 16px", textAlign: "center", color: "#4caf82", fontWeight: 600 }}>
     ✅ Terima kasih! Pesanan telah Anda konfirmasi.
+    <br />
+    <span style={{ fontSize: ".8rem", color: "var(--text3)" }}>
+      Butuh bantuan? <a href="https://wa.me/081328046768" target="_blank" rel="noopener noreferrer" style={{color: "var(--gold)"}}>Hubungi Admin</a>
+    </span>
   </div>
 )}
 
@@ -396,7 +407,6 @@ function UserChatPanel() {
   const [txt,    setTxt]    = useState("");
   const [ordData,setOrdData]= useState(null);
   const [myOrders, setMyOrders] = useState([]);
-  const [confirmed, setConfirmed] = useState(false); // status tombol sudah diklik
   const chatRef = useRef(null);
 
   useEffect(() => {
