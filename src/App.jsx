@@ -111,7 +111,7 @@ function Modal({open, onClose, children}) {
   );
 }
 
-// ─── Product Card (sama seperti sebelumnya, tidak diubah) ─────────────────
+// ─── Product Card ─────────────────────────────────────────────────────────
 function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
   const img   = getImg(p);
   const badge = p.bestSeller?"Best Seller":p.isNew?"New":(p.isSale||p.onSale)?"Sale":(p.badge||"");
@@ -147,7 +147,7 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
   );
 }
 
-// ─── ORDER MODAL (sama seperti sebelumnya, tidak diubah) ──────────────────
+// ─── ORDER MODAL ──────────────────────────────────────────────────────────
 function OrderModal({p}) {
   const stok       = getStock(p);
   const [step,     setStep]    = useState("form");
@@ -343,44 +343,7 @@ function OrderModal({p}) {
       <div className="chat-hdr"><Ic.Chat/> <span>Chat dengan Admin</span>
         <span className="chat-status">● Online</span></div>
       <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}</div>
-      
-     // ─── Di dalam return, setelah status-bar ──────────────────────────────
-
-{status === "done" && !ordData?.buyerConfirmed && (
-  <div style={{ padding: "8px 16px", textAlign: "center" }}>
-    <button 
-      className="btn-order" 
-      style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
-      onClick={async () => {
-        // Update Firestore: tandai buyer sudah konfirmasi
-        await updateDoc(doc(db, "orders", selOrd), {
-          buyerConfirmed: true,
-          confirmedAt: serverTimestamp()
-        });
-        // Kirim pesan ke chat
-        await addDoc(collection(db, `orders/${selOrd}/chats`), {
-          from: "system",
-          text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
-          createdAt: serverTimestamp()
-        });
-        toast.success("Terima kasih! Pesanan selesai.");
-      }}
-    >
-      ✅ Saya Sudah Menerima Pesanan
-    </button>
-  </div>
-)}
-{status === "done" && ordData?.buyerConfirmed && (
-  <div style={{ padding: "8px 16px", textAlign: "center", color: "#4caf82", fontWeight: 600 }}>
-    ✅ Terima kasih! Pesanan telah Anda konfirmasi.
-    <br />
-    <span style={{ fontSize: ".8rem", color: "var(--text3)" }}>
-      Butuh bantuan? <a href="https://wa.me/081328046768" target="_blank" rel="noopener noreferrer" style={{color: "var(--gold)"}}>Hubungi Admin</a>
-    </span>
-  </div>
-)}
-
-      <div className="chat-msgs" ref={chatRef}>        
+      <div className="chat-msgs" ref={chatRef}>
         {msgs.map(m=>(
           <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
             {m.from==="system"
@@ -400,7 +363,7 @@ function OrderModal({p}) {
   );
 }
 
-// ─── USER CHAT PANEL (realtime notifikasi) ────────────────────────────────
+// ─── USER CHAT PANEL ──────────────────────────────────────────────────────
 function UserChatPanel() {
   const [selOrd, setSelOrd] = useState(null);
   const [msgs,   setMsgs]   = useState([]);
@@ -471,8 +434,9 @@ function UserChatPanel() {
       setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
     });
     const unsubOrder = onSnapshot(doc(db, "orders", selOrd), snap => {
-      if (snap.exists()) setOrdData(snap.data());
-      else setSelOrd(null);
+      if (snap.exists()) {
+        setOrdData(snap.data());
+      } else setSelOrd(null);
     });
     return () => { unsubChat(); unsubOrder(); };
   }, [selOrd]);
@@ -538,24 +502,38 @@ function UserChatPanel() {
         {SL[status] || status}
       </div>
       
-       {status === "done" && (
-  <div style={{ padding: "8px 16px", textAlign: "center" }}>
-    <button 
-      className="btn-order" 
-      style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
-      onClick={async () => {
-        await addDoc(collection(db, `orders/${selOrd}/chats`), {
-          from: "system",
-          text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
-          createdAt: serverTimestamp()
-        });
-        toast.success("Terima kasih! Pesanan selesai.");
-      }}
-    >
-      ✅ Saya Sudah Menerima Pesanan
-    </button>
-  </div>
-)}
+      {/* Tombol konfirmasi buyer jika status done dan belum dikonfirmasi */}
+      {status === "done" && !ordData?.buyerConfirmed && (
+        <div style={{ padding: "8px 16px", textAlign: "center" }}>
+          <button 
+            className="btn-order" 
+            style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
+            onClick={async () => {
+              await updateDoc(doc(db, "orders", selOrd), {
+                buyerConfirmed: true,
+                confirmedAt: serverTimestamp()
+              });
+              await addDoc(collection(db, `orders/${selOrd}/chats`), {
+                from: "system",
+                text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
+                createdAt: serverTimestamp()
+              });
+              toast.success("Terima kasih! Pesanan selesai.");
+            }}
+          >
+            ✅ Saya Sudah Menerima Pesanan
+          </button>
+        </div>
+      )}
+      {status === "done" && ordData?.buyerConfirmed && (
+        <div style={{ padding: "8px 16px", textAlign: "center", color: "#4caf82", fontWeight: 600 }}>
+          ✅ Terima kasih! Pesanan telah Anda konfirmasi.
+          <br />
+          <span style={{ fontSize: ".8rem", color: "var(--text3)" }}>
+            Butuh bantuan? <a href="https://wa.me/081328046768" target="_blank" rel="noopener noreferrer" style={{color: "var(--gold)"}}>Hubungi Admin</a>
+          </span>
+        </div>
+      )}
 
       <div className="chat-msgs" ref={chatRef}>
         {msgs.map(m => (
@@ -577,8 +555,8 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN LOGIN (Firebase Auth) ─────────────────────────────────────────
-function AdminLogin({ onLogin, onClose }) {
+// ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
+function AdminLogin({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -590,7 +568,7 @@ function AdminLogin({ onLogin, onClose }) {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      onLogin(); // panggil callback untuk tutup modal dan set isAdmin = true
+      onLogin();
     } catch (err) {
       setError("Email atau password salah.");
       console.error(err);
@@ -623,7 +601,7 @@ function AdminLogin({ onLogin, onClose }) {
   );
 }
 
-// ─── ADMIN CHAT PANEL (dengan Auth, tanpa token) ─────────────────────────
+// ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
 function AdminChatPanel({ onLogout }) {
   const [orders,  setOrders]  = useState([]);
   const [selOrd,  setSelOrd]  = useState(null);
@@ -763,12 +741,27 @@ function AdminChatPanel({ onLogout }) {
           </div>
 
           <div className="acp-status-row">
-            {Object.entries(SL).map(([k,v])=>(
-              <button key={k} type="button"
-                className={`btn-status${selOrd.status===k?" on":""}`}
-                style={selOrd.status===k?{background:SC[k],borderColor:SC[k]}:{}}
-                onClick={()=>updStatus(k)}>{v}</button>
-            ))}
+            {Object.entries(SL).map(([k, v]) => {
+              let disabled = false;
+              if (k === "paid_pending_confirm" && selOrd.status !== "pending") disabled = true;
+              if (k === "confirmed" && selOrd.status !== "paid_pending_confirm") disabled = true;
+              if (k === "shipped" && selOrd.status !== "confirmed") disabled = true;
+              if (k === "done" && selOrd.status !== "shipped") disabled = true;
+              if (k === "pending" || k === "cancelled") disabled = false;
+
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  className={`btn-status${selOrd.status === k ? " on" : ""}`}
+                  style={selOrd.status === k ? { background: SC[k], borderColor: SC[k] } : {}}
+                  onClick={() => updStatus(k)}
+                  disabled={disabled}
+                >
+                  {v}
+                </button>
+              );
+            })}
           </div>
 
           <div className="chat-msgs" ref={chatRef} style={{height:220}}>
@@ -811,12 +804,7 @@ function AdminChatPanel({ onLogout }) {
   );
 }
 
-// ─── Detail, ProductForm, ConfirmDelete (sama seperti sebelumnya, tidak diubah) ──
-// (Untuk menghemat, saya asumsikan fungsi-fungsi ini sudah ada di kode Anda.
-//  Karena kode ini panjang, pastikan Anda juga menyertakan ProductDetail, ProductForm, ConfirmDelete.
-//  Tapi pada kode asli Anda sudah lengkap. Saya akan sertakan di bawah.)
-
-// ─── ProductDetail ────────────────────────────────────────────────────────
+// ─── Detail ───────────────────────────────────────────────────────────────
 function ProductDetail({p, onOrder}) {
   const [idx,setIdx]=useState(0);
   const imgs=Array.isArray(p.images)?p.images.filter(i=>typeof i==="string"&&i.startsWith("http")):(p.image?[p.image]:[]);
@@ -859,7 +847,7 @@ function ProductDetail({p, onOrder}) {
   );
 }
 
-// ─── ProductForm ─────────────────────────────────────────────────────────
+// ─── Product Form ─────────────────────────────────────────────────────────
 function ProductForm({initial,onSave,onCancel,saving}) {
   const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
   const [f,setF]=useState(initial?{...blank,...initial}:blank);
@@ -969,18 +957,15 @@ export default function App() {
   const [notifCnt,    setNotifCnt]    = useState(0);
   const menuRef = useRef(null);
 
-  // Auth state listener
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // Cek apakah email user sesuai dengan admin yang diinginkan
-        // Bisa hardcode atau dari environment variable
-        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "admin@parevie.com";
+        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "awianton2@gmail.com";
         if (user.email === adminEmail) {
           setIsAdmin(true);
         } else {
           setIsAdmin(false);
-          signOut(auth); // logout jika bukan admin
+          signOut(auth);
         }
       } else {
         setIsAdmin(false);
@@ -989,7 +974,6 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  // Realtime products
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
     const u=onSnapshot(q,
@@ -999,7 +983,6 @@ export default function App() {
     return ()=>u();
   },[]);
 
-  // Notif badge admin — hitung dari orders yang belum diproses (realtime)
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"orders"),
@@ -1196,7 +1179,7 @@ export default function App() {
   );
 }
 
-// ── CSS (sama seperti sebelumnya, disalin dari kode Anda) ─────────────────
+// ── CSS ───────────────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
