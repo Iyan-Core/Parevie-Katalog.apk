@@ -7,6 +7,9 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import toast, { Toaster } from 'react-hot-toast';
 
+// ─── Konfigurasi ─────────────────────────────────────────────────────────
+const ADMIN_TOKEN = "RAHASIA_ADMIN_KAMU_2025_XyZ9"; // Ganti dengan token dari firestore.rules
+
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -68,7 +71,7 @@ const Stars = ({val=0}) => {
   );
 };
 
-// ─── Icons ────────────────────────────────────────────────────────────────
+// ─── Icons (sama seperti sebelumnya) ───────────────────────────────────────
 const Ic = {
   Plus:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   Edit:   ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
@@ -108,7 +111,7 @@ function Modal({open, onClose, children}) {
   );
 }
 
-// ─── Product Card — stok realtime dari prop langsung ─────────────────────
+// ─── Product Card ─────────────────────────────────────────────────────────
 function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
   const img   = getImg(p);
   const badge = p.bestSeller?"Best Seller":p.isNew?"New":(p.isSale||p.onSale)?"Sale":(p.badge||"");
@@ -369,13 +372,11 @@ function UserChatPanel() {
   const [myOrders, setMyOrders] = useState([]);
   const chatRef = useRef(null);
 
-  // Load orders from localStorage & sync with Firestore status
   useEffect(() => {
     const stored = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
     setMyOrders(stored);
   }, []);
 
-  // Real-time listener untuk setiap order (update status & notifikasi)
   useEffect(() => {
     if (myOrders.length === 0) return;
     const unsubs = myOrders.map(order => {
@@ -385,7 +386,6 @@ function UserChatPanel() {
           const newStatus = snap.data().status;
           const oldStatus = order.status;
           if (oldStatus && newStatus !== oldStatus) {
-            // Tampilkan notifikasi toast
             const statusMsg = {
               pending: "⏳ Pesanan menunggu konfirmasi",
               paid_pending_confirm: "💰 Pembayaran diterima, menunggu admin",
@@ -399,18 +399,15 @@ function UserChatPanel() {
               icon: '📦',
               duration: 5000
             });
-            // Update status di localStorage
             const updated = myOrders.map(o => 
               o.orderId === order.orderId ? { ...o, status: newStatus } : o
             );
             localStorage.setItem('parevie_my_orders', JSON.stringify(updated));
             setMyOrders(updated);
-            // Jika order yang sedang dibuka, update ordData
             if (selOrd === order.orderId) {
               setOrdData(prev => ({ ...prev, status: newStatus }));
             }
           } else if (!oldStatus) {
-            // first load, simpan status awal
             const updated = myOrders.map(o =>
               o.orderId === order.orderId ? { ...o, status: newStatus } : o
             );
@@ -418,7 +415,6 @@ function UserChatPanel() {
             setMyOrders(updated);
           }
         } else {
-          // Pesanan dihapus admin
           const filtered = myOrders.filter(o => o.orderId !== order.orderId);
           localStorage.setItem('parevie_my_orders', JSON.stringify(filtered));
           setMyOrders(filtered);
@@ -428,9 +424,8 @@ function UserChatPanel() {
       });
     });
     return () => unsubs.forEach(unsub => unsub());
-  }, [myOrders.map(o => o.orderId).join(',')]); // eslint-disable-line
+  }, [myOrders.map(o => o.orderId).join(',')]);
 
-  // Chat listener untuk order yang dipilih
   useEffect(() => {
     if (!selOrd) return;
     const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
@@ -525,7 +520,7 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
+// ─── ADMIN CHAT PANEL (dengan token untuk update status) ──────────────────
 function AdminChatPanel() {
   const [orders,  setOrders]  = useState([]);
   const [selOrd,  setSelOrd]  = useState(null);
@@ -570,12 +565,14 @@ function AdminChatPanel() {
     } catch(e){ alert("Gagal kirim: "+e.message); }
   };
 
+  // PERBAIKAN: tambah __adminToken__ pada update status
   const updStatus = async (s) => {
     if (!selOrd) return;
     try {
-      await updateDoc(doc(db,"orders",selOrd.id),{
+      await updateDoc(doc(db, "orders", selOrd.id), {
         status: s,
         updatedAt: serverTimestamp(),
+        __adminToken__: ADMIN_TOKEN   // <-- token agar rules isAdmin() true
       });
       setSelOrd(o=>({...o, status:s}));
 
@@ -887,7 +884,6 @@ export default function App() {
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
 
-  // Realtime products — stok otomatis update
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
     const u=onSnapshot(q,
@@ -897,7 +893,6 @@ export default function App() {
     return ()=>u();
   },[]);
 
-  // Notif badge admin — hitung dari orders yang belum diproses (realtime)
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"orders"),
@@ -960,7 +955,6 @@ export default function App() {
               <button type="button" className="icon-btn" onClick={()=>setDark(d=>!d)}>
                 {dark?<Ic.Sun/>:<Ic.Moon/>}
               </button>
-              {/* Tombol pesanan saya — untuk user dengan badge notifikasi */}
               {!isAdmin&&(
                 <button type="button" className="icon-btn" onClick={()=>setShowMyOrders(true)}>
                   <Ic.Chat/>
@@ -971,14 +965,12 @@ export default function App() {
                   })()}
                 </button>
               )}
-              {/* Notif admin */}
               {isAdmin&&(
                 <button type="button" className="icon-btn notif-btn" onClick={()=>{setShowACP(true);closeMenu();}}>
                   <Ic.Bell/>
                   {notifCnt>0&&<span className="notif-dot">{notifCnt}</span>}
                 </button>
               )}
-              {/* Burger menu */}
               <div className="burger-wrap" ref={menuRef}>
                 <button type="button" className="icon-btn" onClick={()=>setMenuOpen(o=>!o)}>
                   <Ic.Menu/>
@@ -1016,21 +1008,18 @@ export default function App() {
           </div>
         </header>
 
-        {/* ── HERO ── */}
         <section className="hero">
           <div className="hero-glow"/>
           <p className="hero-eye">Koleksi Parfum</p>
           <p className="hero-sub">{list.length} produk tersedia</p>
         </section>
 
-        {/* ── TABS ── */}
         <div className="cats">
           {GENDERS.map(g=>(
             <button key={g} type="button" className={`cat-btn${cat===g?" on":""}`} onClick={()=>setCat(g)}>{g}</button>
           ))}
         </div>
 
-        {/* ── TOOLBAR ── */}
         <div className="toolbar">
           <div className="sbox">
             <Ic.Search/>
@@ -1047,7 +1036,6 @@ export default function App() {
           </select>
         </div>
 
-        {/* ── GRID ── */}
         <main className="main">
           {loading?(
             <div className="grid2">{[...Array(6)].map((_,i)=><div key={i} className="skel"/>)}</div>
@@ -1070,7 +1058,6 @@ export default function App() {
 
         <footer className="ftr">© 2026 Katalog Parfum — By:Parevie</footer>
 
-        {/* ── MODALS ── */}
         <Modal open={!!selected}     onClose={()=>setSelected(null)}>
           {selected&&<ProductDetail p={selected} onOrder={p=>{setSelected(null);setOrderProd(p);}}/>}
         </Modal>
