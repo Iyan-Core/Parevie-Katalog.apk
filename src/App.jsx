@@ -497,9 +497,29 @@ function UserChatPanel() {
         <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
         <Ic.Chat /> <span>{found?.productName}</span>
       </div>
-      <div className="status-bar" style={{ background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status] }}>
+      <div className="status-bar" style={{ background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status] }}> 
         {SL[status] || status}
       </div>
+      
+       {status === "done" && (
+  <div style={{ padding: "8px 16px", textAlign: "center" }}>
+    <button 
+      className="btn-order" 
+      style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
+      onClick={async () => {
+        await addDoc(collection(db, `orders/${selOrd}/chats`), {
+          from: "system",
+          text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
+          createdAt: serverTimestamp()
+        });
+        toast.success("Terima kasih! Pesanan selesai.");
+      }}
+    >
+      ✅ Saya Sudah Menerima Pesanan
+    </button>
+  </div>
+)}
+
       <div className="chat-msgs" ref={chatRef}>
         {msgs.map(m => (
           <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
