@@ -343,7 +343,33 @@ function OrderModal({p}) {
       <div className="chat-hdr"><Ic.Chat/> <span>Chat dengan Admin</span>
         <span className="chat-status">● Online</span></div>
       <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}</div>
-      <div className="chat-msgs" ref={chatRef}>
+      
+      {status === "done" && !confirmed && (
+  <div style={{ padding: "8px 16px", textAlign: "center" }}>
+    <button 
+      className="btn-order" 
+      style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
+      onClick={async () => {
+        await addDoc(collection(db, `orders/${selOrd}/chats`), {
+          from: "system",
+          text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
+          createdAt: serverTimestamp()
+        });
+        toast.success("Terima kasih! Pesanan selesai.");
+        setConfirmed(true); // hilangkan tombol
+      }}
+    >
+      ✅ Saya Sudah Menerima Pesanan
+    </button>
+  </div>
+)}
+{status === "done" && confirmed && (
+  <div style={{ padding: "8px 16px", textAlign: "center", color: "#4caf82", fontWeight: 600 }}>
+    ✅ Terima kasih! Pesanan telah Anda konfirmasi.
+  </div>
+)}
+
+      <div className="chat-msgs" ref={chatRef}>        
         {msgs.map(m=>(
           <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
             {m.from==="system"
@@ -370,6 +396,7 @@ function UserChatPanel() {
   const [txt,    setTxt]    = useState("");
   const [ordData,setOrdData]= useState(null);
   const [myOrders, setMyOrders] = useState([]);
+  const [confirmed, setConfirmed] = useState(false); // status tombol sudah diklik
   const chatRef = useRef(null);
 
   useEffect(() => {
