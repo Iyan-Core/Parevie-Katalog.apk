@@ -165,8 +165,6 @@ function OrderModal({p}) {
   const [chatTxt,  setChatTxt] = useState("");
   const [submitting,setSub]    = useState(false);
   const [paying,   setPaying]  = useState(false);
-  const [ongkir,   setOngkir]  = useState(0);
-  const [courier,  setCourier] = useState("");
   const chatRef = useRef(null);
 
   const getLocation = () => {
@@ -199,17 +197,12 @@ function OrderModal({p}) {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
     if (!addr.trim()) return alert("Alamat pengiriman wajib diisi!");
-    if (!courier) return alert("Pilih ekspedisi terlebih dahulu!");
     setSub(true);
     try {
-      const total = p.price + ongkir;
       const oRef = await addDoc(collection(db,"orders"),{
         productId:p.id, productName:p.name, productImg:getImg(p),
         price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
         address:addr.trim(), note:note.trim(), status:"pending",
-        courier: courier,
-        ongkir: ongkir,
-        total: total,
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
@@ -217,7 +210,7 @@ function OrderModal({p}) {
       const existing = lsGet();
       if (!existing.find(o=>o.orderId===oRef.id)) {
         lsSet([{orderId:oRef.id, productName:p.name, productImg:getImg(p),
-          price:p.price, total:total, status:"pending", buyerConfirmed:false, courier, ongkir}, ...existing]);
+          price:p.price, status:"pending", buyerConfirmed:false}, ...existing]);
       }
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
@@ -227,7 +220,7 @@ function OrderModal({p}) {
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)} + Ongkir ${fRp(ongkir)} = Total ${fRp(total)}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}`,
         createdAt:serverTimestamp(),
       });
       setStep("qris");
@@ -239,19 +232,18 @@ function OrderModal({p}) {
     if (!orderId) return alert("ID pesanan tidak ditemukan.");
     setPaying(true);
     try {
-      const total = p.price + ongkir;
       await updateDoc(doc(db,"orders",orderId),{status:"paid_pending_confirm",paidAt:serverTimestamp()});
       await addDoc(collection(db,`orders/${orderId}/chats`),{
         from:"buyer",
-        text:`✅ Saya sudah transfer untuk pesanan ${p.name} (Total: ${fRp(total)}). Mohon dikonfirmasi ya 🙏`,
+        text:`✅ Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
         createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,"notifications"),{
         type:"payment_received", orderId,
-        message:`💰 Pembayaran: ${p.name} — ${fRp(total)}`,
+        message:`💰 Pembayaran: ${p.name} — ${fRp(p.price)}`,
         read:false, createdAt:serverTimestamp(),
       });
-      // Update status di localStorage
+      // Update status di localStorage juga
       const arr = lsGet().map(o=>o.orderId===orderId?{...o,status:"paid_pending_confirm"}:o);
       lsSet(arr);
       setStep("chat");
@@ -301,29 +293,11 @@ function OrderModal({p}) {
           </button>
           {gpsText&&<p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>{gpsText}</p>}
         </div>
-        <div className="fg">
-          <label>Pilih Ekspedisi *</label>
-          <select className="finput" value={courier} onChange={e=>{
-            const val = e.target.value;
-            setCourier(val);
-            const prices = { "JNE": 15000, "SiCepat": 12000, "J&T": 18000, "Gojek": 10000, "Grab": 10000 };
-            setOngkir(prices[val] || 0);
-          }}>
-            <option value="">Pilih ekspedisi</option>
-            <option value="JNE">JNE - Rp 15.000</option>
-            <option value="SiCepat">SiCepat - Rp 12.000</option>
-            <option value="J&T">J&T - Rp 18.000</option>
-            <option value="Gojek">Gojek - Rp 10.000</option>
-            <option value="Grab">Grab - Rp 10.000</option>
-          </select>
-          {ongkir > 0 && <p style={{fontSize:".75rem",color:"var(--text3)",marginTop:4}}>Ongkir: {fRp(ongkir)}</p>}
-        </div>
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
         <div className="ord-info">
-          <p>🚚 Pengiriman via <strong>{courier || "—"}</strong> {ongkir > 0 && `· Ongkir ${fRp(ongkir)}`}</p>
+          <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
-          <p>💰 Total: <strong>{fRp(p.price + ongkir)}</strong></p>
         </div>
         <button type="button" className="btn-order" onClick={submitOrder} disabled={submitting}>
           {submitting?"⏳ Mengirim…":"📦 Buat Pesanan"}
@@ -336,9 +310,9 @@ function OrderModal({p}) {
     <div className="ord-wrap">
       <div className="qris-head"><Ic.Qris/> <span>Pembayaran QRIS</span></div>
       <div className="qris-body">
-        <p className="qris-amount">{fRp(p.price + ongkir)}</p>
+        <p className="qris-amount">{fRp(p.price)}</p>
         <p style={{color:"var(--text3)",fontSize:".82rem",marginBottom:16}}>
-          Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name} · {courier && `Ekspedisi ${courier}`}
+          Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
         </p>
         <div className="qris-img-wrap">
           <img src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png?updatedAt=1781320550809"
@@ -348,7 +322,7 @@ function OrderModal({p}) {
         <div className="qris-steps">
           <p>1. Buka e-wallet / m-banking</p>
           <p>2. Scan kode QR di atas</p>
-          <p>3. Bayar tepat <strong>{fRp(p.price + ongkir)}</strong></p>
+          <p>3. Bayar tepat <strong>{fRp(p.price)}</strong></p>
           <p>4. Klik tombol di bawah setelah transfer</p>
         </div>
         <button type="button" className={`btn-order${paying?" disabled":""}`}
@@ -363,7 +337,7 @@ function OrderModal({p}) {
     <div className="chat-wrap">
       <div className="chat-hdr"><Ic.Chat/> <span>Chat dengan Admin</span>
         <span className="chat-status">● Online</span></div>
-      <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · Total {fRp(p.price + ongkir)}</div>
+      <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}</div>
       <div className="chat-msgs" ref={chatRef}>
         {msgs.map(m=>(
           <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
@@ -383,7 +357,6 @@ function OrderModal({p}) {
     </div>
   );
 }
-
 
 // ─── USER CHAT PANEL ──────────────────────────────────────────────────────
 function UserChatPanel() {
@@ -451,11 +424,14 @@ function UserChatPanel() {
   };
 
   // ── Konfirmasi terima pesanan ──
+  // Sekarang tombol muncul saat status === "shipped" dan ubah status menjadi "done"
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
+      // Ubah status menjadi "done" dan set buyerConfirmed = true
       await updateDoc(doc(db,"orders",selOrd),{
+        status: "done",
         buyerConfirmed: true,
         buyerConfirmedAt: serverTimestamp(),
       });
@@ -464,13 +440,13 @@ function UserChatPanel() {
         text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
         createdAt:serverTimestamp(),
       });
-      // Langsung update localStorage agar tombol tidak balik
+      // Update localStorage
       const arr = lsGet().map(o=>
-        o.orderId===selOrd ? {...o, buyerConfirmed:true} : o
+        o.orderId===selOrd ? {...o, status:"done", buyerConfirmed:true} : o
       );
       lsSet(arr);
       setMyOrders([...arr]);
-      setOrdData(prev=>({...prev, buyerConfirmed:true}));
+      setOrdData(prev=>({...prev, status:"done", buyerConfirmed:true}));
     } catch(e){ alert("Gagal konfirmasi: "+e.message); }
     setConfirming(false);
   };
@@ -535,7 +511,8 @@ function UserChatPanel() {
       </div>
 
       {/* ── Tombol konfirmasi terima pesanan ── */}
-      {status==="done" && !buyerConfirmed && (
+      {/* Muncul hanya saat status === "shipped" */}
+      {status === "shipped" && !buyerConfirmed && (
         <div className="buyer-confirm-box">
           <button
             className="btn-buyer-confirm"
@@ -546,8 +523,8 @@ function UserChatPanel() {
         </div>
       )}
 
-      {/* ── Tampilan setelah konfirmasi — PERMANEN ── */}
-      {status==="done" && buyerConfirmed && (
+      {/* ── Tampilan setelah konfirmasi (status done) ── */}
+      {status === "done" && buyerConfirmed && (
         <div className="buyer-thankyou-box">
           <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
           <p className="buyer-thankyou-sub">
@@ -626,6 +603,8 @@ function AdminLogin({onLogin}) {
   );
 }
 
+
+
 // ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
 function AdminChatPanel({onLogout}) {
   const [orders,  setOrders]  = useState([]);
@@ -669,10 +648,24 @@ function AdminChatPanel({onLogout}) {
 
   const updStatus = async (s) => {
     if (!selOrd) return;
+    // Validasi status yang diizinkan berdasarkan status saat ini
+    const current = selOrd.status;
+    const allowed = {
+      pending:        ['confirmed'],
+      paid_pending_confirm: ['confirmed'],
+      confirmed:      ['shipped'],
+      shipped:        ['done'],
+      done:           [],
+      cancelled:      []
+    };
+    if (!allowed[current]?.includes(s) && !allowed[current]?.includes(s)) {
+      // Jika tidak diizinkan, tidak melakukan apa-apa
+      return;
+    }
     try {
       await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
       setSelOrd(o=>({...o,status:s}));
-      if (s==="confirmed"&&selOrd.productId) {
+      if (s==="confirmed" && selOrd.productId) {
         try {
           const prodRef=doc(db,"products",selOrd.productId);
           const prodSnap=await getDoc(prodRef);
@@ -712,6 +705,21 @@ function AdminChatPanel({onLogout}) {
     confirmed:"#4caf82",shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
   const SL={pending:"Pending",paid_pending_confirm:"Sudah Bayar",
     confirmed:"Konfirmasi",shipped:"Kirim",done:"Selesai",cancelled:"Batal"};
+
+  // ── Fungsi untuk menentukan apakah tombol status aktif ──
+  const isStatusAllowed = (targetStatus) => {
+    const current = selOrd?.status || "pending";
+    if (current === "pending" || current === "paid_pending_confirm") {
+      return targetStatus === "confirmed";
+    }
+    if (current === "confirmed") {
+      return targetStatus === "shipped";
+    }
+    if (current === "shipped") {
+      return targetStatus === "done";
+    }
+    return false;
+  };
 
   return (
     <div className="acp">
@@ -753,15 +761,51 @@ function AdminChatPanel({onLogout}) {
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
             {selOrd.buyerConfirmed&&<p style={{color:"var(--green)",fontWeight:600}}>✅ Buyer sudah konfirmasi terima</p>}
           </div>
+
+          {/* ─── TOMBOL STATUS ─── */}
           <div className="acp-status-row">
-            {Object.entries(SL).map(([k,v])=>(
-              <button key={k} type="button"
-                className={`btn-status${selOrd.status===k?" on":""}`}
-                style={selOrd.status===k?{background:SC[k],borderColor:SC[k]}:{}}
-                onClick={()=>updStatus(k)}>{v}
-              </button>
-            ))}
+            {/* Tombol Konfirmasi */}
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="confirmed"?" on":""}`}
+              style={selOrd.status==="confirmed"?{background:SC.confirmed,borderColor:SC.confirmed}:{}}
+              onClick={()=>updStatus("confirmed")}
+              disabled={!isStatusAllowed("confirmed")}
+            >
+              Konfirmasi
+            </button>
+            {/* Tombol Kirim */}
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="shipped"?" on":""}`}
+              style={selOrd.status==="shipped"?{background:SC.shipped,borderColor:SC.shipped}:{}}
+              onClick={()=>updStatus("shipped")}
+              disabled={!isStatusAllowed("shipped")}
+            >
+              Kirim
+            </button>
+            {/* Tombol Selesai */}
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="done"?" on":""}`}
+              style={selOrd.status==="done"?{background:SC.done,borderColor:SC.done}:{}}
+              onClick={()=>updStatus("done")}
+              disabled={!isStatusAllowed("done")}
+            >
+              Selesai
+            </button>
+            {/* Tombol Batal (hanya aktif saat pending) */}
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="cancelled"?" on":""}`}
+              style={selOrd.status==="cancelled"?{background:SC.cancelled,borderColor:SC.cancelled}:{}}
+              onClick={()=>updStatus("cancelled")}
+              disabled={selOrd.status!=="pending" && selOrd.status!=="paid_pending_confirm"}
+            >
+              Batal
+            </button>
           </div>
+
           <div className="chat-msgs" ref={chatRef} style={{height:220}}>
             {msgs.map(m=>(
               <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
@@ -1312,15 +1356,18 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .del-confirm-bar span{flex:1}
 .btn-yes-del{padding:4px 12px;border-radius:6px;border:none;background:var(--red);color:#fff;font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
 .btn-no-del{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
+/* Buyer confirm box */
 .buyer-confirm-box{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
 .btn-buyer-confirm{width:100%;padding:11px;border-radius:10px;border:none;background:#4caf82;color:#fff;font-weight:700;font-size:.88rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-buyer-confirm:hover:not(:disabled){background:#3d9e70}
 .btn-buyer-confirm:disabled{opacity:.6;cursor:not-allowed}
+/* Buyer thankyou box — permanen setelah konfirmasi */
 .buyer-thankyou-box{padding:14px 16px;background:#4caf8218;border-bottom:1px solid #4caf8233;flex-shrink:0;text-align:center}
 .buyer-thankyou-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--green);margin-bottom:4px;font-weight:700}
 .buyer-thankyou-sub{font-size:.8rem;color:var(--text2);line-height:1.6;margin-bottom:10px}
 .btn-wa-help{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#25d366;color:#fff;font-weight:600;font-size:.8rem;text-decoration:none;transition:all .2s}
 .btn-wa-help:hover{background:#1da851}
+/* Admin panel */
 .acp{padding:16px;min-height:380px}
 .acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:0;display:flex;align-items:center;gap:7px;color:var(--text)}
 .acp-list{display:flex;flex-direction:column;gap:8px}
@@ -1331,14 +1378,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .acp-addr{font-size:.72rem;color:var(--text3)}
 .acp-price{font-weight:700;color:var(--gold);font-size:.85rem;margin-bottom:4px}
 .acp-detail{display:flex;flex-direction:column;gap:10px}
-.btn-back{padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif}
+.btn-back{padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-back:hover{background:var(--bg3)}
 .btn-del-order{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid #e05a5a44;background:transparent;color:var(--red);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif}
 .btn-del-order:hover{background:#e05a5a18}
 .acp-order-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
 .acp-status-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px}
 .btn-status{padding:5px 10px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;text-transform:capitalize}
-.btn-status:hover{border-color:var(--gold);color:var(--gold)}
+.btn-status:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+.btn-status:disabled{opacity:0.4;cursor:not-allowed}
 .btn-status.on{color:#0d0d14;font-weight:700}
 .pform{padding:18px}
 .pform-ttl{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:14px;color:var(--text)}
@@ -1377,18 +1425,3 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cbox p{color:var(--text2);margin-bottom:20px;font-size:.85rem;line-height:1.6}
 @media(max-width:400px){.grid2{gap:7px}.pform-grid{grid-template-columns:1fr}}
 `;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
