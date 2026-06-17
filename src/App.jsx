@@ -6,7 +6,6 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-import toast, { Toaster } from 'react-hot-toast';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -57,6 +56,11 @@ const normGender = (g="") => {
 
 const getStock = (p) => Number(p?.stock ?? p?.size ?? 0);
 
+// ─── LocalStorage helpers ─────────────────────────────────────────────────
+const LS_KEY = "parevie_my_orders";
+const lsGet  = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)||"[]"); } catch { return []; } };
+const lsSet  = (arr) => { try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch {} };
+
 const Stars = ({val=0}) => {
   const full=Math.floor(val), half=val%1>=0.5;
   return (
@@ -89,7 +93,7 @@ const Ic = {
   Chat:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>,
   Menu:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   Qris:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="21" y1="14" x2="21" y2="17"/></svg>,
-  Check:  ()=><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>,
+  WA:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>,
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────
@@ -149,7 +153,6 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
 
 // ─── ORDER MODAL ──────────────────────────────────────────────────────────
 function OrderModal({p}) {
-  const stok       = getStock(p);
   const [step,     setStep]    = useState("form");
   const [name,     setName]    = useState("");
   const [phone,    setPhone]   = useState("");
@@ -162,34 +165,29 @@ function OrderModal({p}) {
   const [chatTxt,  setChatTxt] = useState("");
   const [submitting,setSub]    = useState(false);
   const [paying,   setPaying]  = useState(false);
+  const [ongkir,   setOngkir]  = useState(0);
+  const [courier,  setCourier] = useState("");
   const chatRef = useRef(null);
 
   const getLocation = () => {
-    if (!navigator.geolocation) {
-      setLocState("error");
-      setGpsText("GPS tidak tersedia di perangkat ini.");
-      return;
-    }
-    setLocState("loading");
-    setGpsText("Mengambil lokasi GPS…");
+    if (!navigator.geolocation) { setLocState("error"); setGpsText("GPS tidak tersedia."); return; }
+    setLocState("loading"); setGpsText("Mengambil lokasi GPS…");
     const tid = setTimeout(()=>{
       setLocState("error");
-      setGpsText("Timeout. Aktifkan GPS & izinkan lokasi di Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi.");
+      setGpsText("Timeout. Aktifkan GPS & izin lokasi di Pengaturan → Aplikasi → Izin → Lokasi.");
     },15000);
     navigator.geolocation.getCurrentPosition(
       (pos)=>{
         clearTimeout(tid);
         const la=pos.coords.latitude.toFixed(6), lo=pos.coords.longitude.toFixed(6);
         const url=`https://maps.google.com/?q=${la},${lo}`;
-        setGpsText(`📍 ${la}, ${lo}`);
-        setLocState("done");
+        setGpsText(`📍 ${la}, ${lo}`); setLocState("done");
         setAddr(prev=>prev.includes("GPS:")?prev:(prev.trim()?prev+"\n":"")+`GPS: ${url}`);
       },
       (err)=>{
-        clearTimeout(tid);
-        setLocState("error");
+        clearTimeout(tid); setLocState("error");
         const m=err.code===1?"Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan"
-          :err.code===2?"GPS tidak dapat ditemukan. Pastikan GPS aktif."
+          :err.code===2?"GPS tidak ditemukan. Pastikan GPS aktif."
           :"Timeout. Coba di area terbuka.";
         setGpsText(m);
       },
@@ -197,29 +195,30 @@ function OrderModal({p}) {
     );
   };
 
-  const saveMyOrder = (orderId, productName, productImg, price) => {
-    const existing = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
-    if (!existing.find(o => o.orderId === orderId)) {
-      const newOrder = { orderId, productName, productImg, price, status: 'pending' };
-      existing.unshift(newOrder);
-      localStorage.setItem('parevie_my_orders', JSON.stringify(existing));
-    }
-  };
-
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
     if (!addr.trim()) return alert("Alamat pengiriman wajib diisi!");
+    if (!courier) return alert("Pilih ekspedisi terlebih dahulu!");
     setSub(true);
     try {
+      const total = p.price + ongkir;
       const oRef = await addDoc(collection(db,"orders"),{
         productId:p.id, productName:p.name, productImg:getImg(p),
         price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
         address:addr.trim(), note:note.trim(), status:"pending",
+        courier: courier,
+        ongkir: ongkir,
+        total: total,
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
-      saveMyOrder(oRef.id, p.name, getImg(p), p.price);
+      // Simpan ke localStorage
+      const existing = lsGet();
+      if (!existing.find(o=>o.orderId===oRef.id)) {
+        lsSet([{orderId:oRef.id, productName:p.name, productImg:getImg(p),
+          price:p.price, total:total, status:"pending", buyerConfirmed:false, courier, ongkir}, ...existing]);
+      }
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
         message:`🛒 Pesanan baru: ${p.name}`,
@@ -228,7 +227,7 @@ function OrderModal({p}) {
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)} + Ongkir ${fRp(ongkir)} = Total ${fRp(total)}`,
         createdAt:serverTimestamp(),
       });
       setStep("qris");
@@ -240,17 +239,21 @@ function OrderModal({p}) {
     if (!orderId) return alert("ID pesanan tidak ditemukan.");
     setPaying(true);
     try {
+      const total = p.price + ongkir;
       await updateDoc(doc(db,"orders",orderId),{status:"paid_pending_confirm",paidAt:serverTimestamp()});
       await addDoc(collection(db,`orders/${orderId}/chats`),{
         from:"buyer",
-        text:`✅ Saya sudah transfer untuk pesanan ${p.name} (${fRp(p.price)}). Mohon dikonfirmasi ya 🙏`,
+        text:`✅ Saya sudah transfer untuk pesanan ${p.name} (Total: ${fRp(total)}). Mohon dikonfirmasi ya 🙏`,
         createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,"notifications"),{
         type:"payment_received", orderId,
-        message:`💰 Pembayaran: ${p.name} — ${fRp(p.price)}`,
+        message:`💰 Pembayaran: ${p.name} — ${fRp(total)}`,
         read:false, createdAt:serverTimestamp(),
       });
+      // Update status di localStorage
+      const arr = lsGet().map(o=>o.orderId===orderId?{...o,status:"paid_pending_confirm"}:o);
+      lsSet(arr);
       setStep("chat");
     } catch(e){ alert("Gagal konfirmasi: "+e.message); }
     setPaying(false);
@@ -298,11 +301,29 @@ function OrderModal({p}) {
           </button>
           {gpsText&&<p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>{gpsText}</p>}
         </div>
+        <div className="fg">
+          <label>Pilih Ekspedisi *</label>
+          <select className="finput" value={courier} onChange={e=>{
+            const val = e.target.value;
+            setCourier(val);
+            const prices = { "JNE": 15000, "SiCepat": 12000, "J&T": 18000, "Gojek": 10000, "Grab": 10000 };
+            setOngkir(prices[val] || 0);
+          }}>
+            <option value="">Pilih ekspedisi</option>
+            <option value="JNE">JNE - Rp 15.000</option>
+            <option value="SiCepat">SiCepat - Rp 12.000</option>
+            <option value="J&T">J&T - Rp 18.000</option>
+            <option value="Gojek">Gojek - Rp 10.000</option>
+            <option value="Grab">Grab - Rp 10.000</option>
+          </select>
+          {ongkir > 0 && <p style={{fontSize:".75rem",color:"var(--text3)",marginTop:4}}>Ongkir: {fRp(ongkir)}</p>}
+        </div>
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
         <div className="ord-info">
-          <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
+          <p>🚚 Pengiriman via <strong>{courier || "—"}</strong> {ongkir > 0 && `· Ongkir ${fRp(ongkir)}`}</p>
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
+          <p>💰 Total: <strong>{fRp(p.price + ongkir)}</strong></p>
         </div>
         <button type="button" className="btn-order" onClick={submitOrder} disabled={submitting}>
           {submitting?"⏳ Mengirim…":"📦 Buat Pesanan"}
@@ -315,9 +336,9 @@ function OrderModal({p}) {
     <div className="ord-wrap">
       <div className="qris-head"><Ic.Qris/> <span>Pembayaran QRIS</span></div>
       <div className="qris-body">
-        <p className="qris-amount">{fRp(p.price)}</p>
+        <p className="qris-amount">{fRp(p.price + ongkir)}</p>
         <p style={{color:"var(--text3)",fontSize:".82rem",marginBottom:16}}>
-          Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name}
+          Pesanan #{orderId?.slice(-6).toUpperCase()} · {p.name} · {courier && `Ekspedisi ${courier}`}
         </p>
         <div className="qris-img-wrap">
           <img src="https://ik.imagekit.io/bn7fafwae/logo/parevie.png?updatedAt=1781320550809"
@@ -327,7 +348,7 @@ function OrderModal({p}) {
         <div className="qris-steps">
           <p>1. Buka e-wallet / m-banking</p>
           <p>2. Scan kode QR di atas</p>
-          <p>3. Bayar tepat <strong>{fRp(p.price)}</strong></p>
+          <p>3. Bayar tepat <strong>{fRp(p.price + ongkir)}</strong></p>
           <p>4. Klik tombol di bawah setelah transfer</p>
         </div>
         <button type="button" className={`btn-order${paying?" disabled":""}`}
@@ -342,7 +363,7 @@ function OrderModal({p}) {
     <div className="chat-wrap">
       <div className="chat-hdr"><Ic.Chat/> <span>Chat dengan Admin</span>
         <span className="chat-status">● Online</span></div>
-      <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · {fRp(p.price)}</div>
+      <div className="chat-info">#{orderId?.slice(-6).toUpperCase()} · {p.name} · Total {fRp(p.price + ongkir)}</div>
       <div className="chat-msgs" ref={chatRef}>
         {msgs.map(m=>(
           <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
@@ -363,102 +384,109 @@ function OrderModal({p}) {
   );
 }
 
+
 // ─── USER CHAT PANEL ──────────────────────────────────────────────────────
 function UserChatPanel() {
-  const [selOrd, setSelOrd] = useState(null);
-  const [msgs,   setMsgs]   = useState([]);
-  const [txt,    setTxt]    = useState("");
-  const [ordData,setOrdData]= useState(null);
-  const [myOrders, setMyOrders] = useState([]);
+  const [selOrd,   setSelOrd]   = useState(null);
+  const [msgs,     setMsgs]     = useState([]);
+  const [txt,      setTxt]      = useState("");
+  const [ordData,  setOrdData]  = useState(null);
+  const [myOrders, setMyOrders] = useState(lsGet);
+  const [confirming, setConfirming] = useState(false);
   const chatRef = useRef(null);
 
-  useEffect(() => {
-    const stored = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
-    setMyOrders(stored);
-  }, []);
+  // Sync localStorage → state setiap buka panel
+  useEffect(()=>{ setMyOrders(lsGet()); },[]);
 
-  useEffect(() => {
-    if (myOrders.length === 0) return;
-    const unsubs = myOrders.map(order => {
-      const orderRef = doc(db, "orders", order.orderId);
-      return onSnapshot(orderRef, (snap) => {
+  // Listen status semua pesanan secara realtime
+  useEffect(()=>{
+    if (myOrders.length===0) return;
+    const unsubs = myOrders.map(order=>{
+      return onSnapshot(doc(db,"orders",order.orderId), snap=>{
         if (snap.exists()) {
           const newStatus = snap.data().status;
-          const oldStatus = order.status;
-          if (oldStatus && newStatus !== oldStatus) {
-            const statusMsg = {
-              pending: "⏳ Pesanan menunggu konfirmasi",
-              paid_pending_confirm: "💰 Pembayaran diterima, menunggu admin",
-              confirmed: "✅ Pesanan dikonfirmasi! Sedang disiapkan",
-              shipped: "🚚 Pesanan sedang dalam perjalanan",
-              done: "🎉 Pesanan selesai! Terima kasih",
-              cancelled: "❌ Pesanan dibatalkan"
-            };
-            toast.success(`${order.productName}\n${statusMsg[newStatus] || newStatus}`, {
-              id: `status-${order.orderId}`,
-              icon: '📦',
-              duration: 5000
-            });
-            const updated = myOrders.map(o => 
-              o.orderId === order.orderId ? { ...o, status: newStatus } : o
-            );
-            localStorage.setItem('parevie_my_orders', JSON.stringify(updated));
-            setMyOrders(updated);
-            if (selOrd === order.orderId) {
-              setOrdData(prev => ({ ...prev, status: newStatus }));
-            }
-          } else if (!oldStatus) {
-            const updated = myOrders.map(o =>
-              o.orderId === order.orderId ? { ...o, status: newStatus } : o
-            );
-            localStorage.setItem('parevie_my_orders', JSON.stringify(updated));
-            setMyOrders(updated);
-          }
+          const newBC     = snap.data().buyerConfirmed || false;
+          // Update localStorage
+          const arr = lsGet().map(o=>
+            o.orderId===order.orderId ? {...o, status:newStatus, buyerConfirmed:newBC} : o
+          );
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd===order.orderId) setOrdData(snap.data());
         } else {
-          const filtered = myOrders.filter(o => o.orderId !== order.orderId);
-          localStorage.setItem('parevie_my_orders', JSON.stringify(filtered));
-          setMyOrders(filtered);
-          toast.error(`Pesanan ${order.productName} telah dihapus admin`, { id: `del-${order.orderId}` });
-          if (selOrd === order.orderId) setSelOrd(null);
+          // Pesanan dihapus admin
+          const arr = lsGet().filter(o=>o.orderId!==order.orderId);
+          lsSet(arr); setMyOrders([...arr]);
+          if (selOrd===order.orderId) setSelOrd(null);
         }
       });
     });
-    return () => unsubs.forEach(unsub => unsub());
-  }, [myOrders.map(o => o.orderId).join(',')]);
+    return ()=>unsubs.forEach(u=>u());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[myOrders.map(o=>o.orderId).join(","), selOrd]);
 
-  useEffect(() => {
+  // Listen chat + order saat detail dibuka
+  useEffect(()=>{
     if (!selOrd) return;
-    const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
-    const unsubChat = onSnapshot(q, snap => {
-      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
+    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
+    const u1=onSnapshot(q,snap=>{
+      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
+      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
-    const unsubOrder = onSnapshot(doc(db, "orders", selOrd), snap => {
-      if (snap.exists()) {
-        setOrdData(snap.data());
-      } else setSelOrd(null);
+    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{
+      if (snap.exists()) setOrdData(snap.data());
+      else setSelOrd(null);
     });
-    return () => { unsubChat(); unsubOrder(); };
-  }, [selOrd]);
+    return ()=>{ u1(); u2(); };
+  },[selOrd]);
 
   const sendChat = async () => {
-    if (!txt.trim() || !selOrd) return;
+    if (!txt.trim()||!selOrd) return;
     try {
-      await addDoc(collection(db, `orders/${selOrd}/chats`), { from: "buyer", text: txt.trim(), createdAt: serverTimestamp() });
+      await addDoc(collection(db,`orders/${selOrd}/chats`),{
+        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
+      });
       setTxt("");
-    } catch (e) { alert("Gagal: " + e.message); }
+    } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  const SL = { pending: "⏳ Menunggu konfirmasi", paid_pending_confirm: "💰 Pembayaran diverifikasi",
-    confirmed: "✅ Dikonfirmasi", shipped: "🚚 Dalam pengiriman", done: "🎉 Selesai", cancelled: "❌ Dibatalkan" };
-  const SC = { pending: "#c9a84c", paid_pending_confirm: "#7c6af5", confirmed: "#4caf82",
-    shipped: "#29b6f6", done: "#4caf82", cancelled: "#e05a5a" };
+  // ── Konfirmasi terima pesanan ──
+  const handleBuyerConfirm = async () => {
+    if (!selOrd || confirming) return;
+    setConfirming(true);
+    try {
+      await updateDoc(doc(db,"orders",selOrd),{
+        buyerConfirmed: true,
+        buyerConfirmedAt: serverTimestamp(),
+      });
+      await addDoc(collection(db,`orders/${selOrd}/chats`),{
+        from:"system",
+        text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
+        createdAt:serverTimestamp(),
+      });
+      // Langsung update localStorage agar tombol tidak balik
+      const arr = lsGet().map(o=>
+        o.orderId===selOrd ? {...o, buyerConfirmed:true} : o
+      );
+      lsSet(arr);
+      setMyOrders([...arr]);
+      setOrdData(prev=>({...prev, buyerConfirmed:true}));
+    } catch(e){ alert("Gagal konfirmasi: "+e.message); }
+    setConfirming(false);
+  };
 
-  if (myOrders.length === 0) return (
+  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
+    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
+  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
+    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+
+  const WA_ADMIN = "6281328046768"; // ganti nomor WA admin
+
+  if (myOrders.length===0) return (
     <div className="acp">
       <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-      <div className="empty" style={{ padding: "40px 16px" }}>
-        <p style={{ fontSize: "2rem" }}>🛒</p><h3>Belum ada pesanan</h3>
+      <div className="empty" style={{padding:"40px 16px"}}>
+        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
         <p>Pesanan akan muncul setelah checkout</p>
       </div>
     </div>
@@ -468,21 +496,21 @@ function UserChatPanel() {
     <div className="acp">
       <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
       <div className="acp-list">
-        {myOrders.map(o => {
-          const status = o.status || 'pending';
+        {myOrders.map(o=>{
+          const status = o.status||"pending";
           return (
-            <div key={o.orderId} className="acp-item" onClick={() => setSelOrd(o.orderId)}>
-              <img src={o.productImg || IMG_PH} alt={o.productName}
-                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
-                onError={e => { e.target.src = IMG_PH; }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
+              <img src={o.productImg||IMG_PH} alt={o.productName}
+                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
+                onError={e=>{e.target.src=IMG_PH;}}/>
+              <div style={{flex:1,minWidth:0}}>
                 <p className="acp-pname">{o.productName}</p>
                 <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
-                <span className="acp-status" style={{ color: SC[status], fontSize: ".7rem", fontWeight: 600 }}>
-                  {SL[status] || status}
+                <span style={{fontSize:".7rem",fontWeight:600,color:SC[status]||"#888"}}>
+                  {SL[status]||status}
                 </span>
               </div>
-              <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>Chat →</span>
+              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
             </div>
           );
         })}
@@ -490,89 +518,86 @@ function UserChatPanel() {
     </div>
   );
 
-  const status = ordData?.status || "pending";
-  const found = myOrders.find(o => o.orderId === selOrd);
+  const status      = ordData?.status||"pending";
+  const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
+  const buyerConfirmed = ordData?.buyerConfirmed || lsOrder?.buyerConfirmed || false;
+  const found       = lsOrder;
+
   return (
     <div className="chat-wrap">
       <div className="chat-hdr">
-        <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
-        <Ic.Chat /> <span>{found?.productName}</span>
+        <button type="button" onClick={()=>setSelOrd(null)} className="btn-back-chat">←</button>
+        <Ic.Chat/> <span>{found?.productName}</span>
       </div>
-      <div className="status-bar" style={{ background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status] }}> 
-        {SL[status] || status}
+      <div className="status-bar" style={{
+        background:SC[status]+"22",borderColor:SC[status]+"55",color:SC[status]}}>
+        {SL[status]||status}
       </div>
-      
-      {/* Tombol konfirmasi buyer jika status done dan belum dikonfirmasi */}
-      {status === "done" && !ordData?.buyerConfirmed && (
-        <div style={{ padding: "8px 16px", textAlign: "center" }}>
-          <button 
-            className="btn-order" 
-            style={{ background: "#4caf82", maxWidth: 300, margin: "0 auto" }}
-            onClick={async () => {
-              await updateDoc(doc(db, "orders", selOrd), {
-                buyerConfirmed: true,
-                confirmedAt: serverTimestamp()
-              });
-              await addDoc(collection(db, `orders/${selOrd}/chats`), {
-                from: "system",
-                text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik.",
-                createdAt: serverTimestamp()
-              });
-              toast.success("Terima kasih! Pesanan selesai.");
-            }}
-          >
-            ✅ Saya Sudah Menerima Pesanan
+
+      {/* ── Tombol konfirmasi terima pesanan ── */}
+      {status==="done" && !buyerConfirmed && (
+        <div className="buyer-confirm-box">
+          <button
+            className="btn-buyer-confirm"
+            onClick={handleBuyerConfirm}
+            disabled={confirming}>
+            {confirming?"⏳ Mengonfirmasi…":"✅ Saya Sudah Menerima Pesanan"}
           </button>
         </div>
       )}
-      {status === "done" && ordData?.buyerConfirmed && (
-        <div style={{ padding: "8px 16px", textAlign: "center", color: "#4caf82", fontWeight: 600 }}>
-          ✅ Terima kasih! Pesanan telah Anda konfirmasi.
-          <br />
-          <span style={{ fontSize: ".8rem", color: "var(--text3)" }}>
-            Butuh bantuan? <a href="https://wa.me/081328046768" target="_blank" rel="noopener noreferrer" style={{color: "var(--gold)"}}>Hubungi Admin</a>
-          </span>
+
+      {/* ── Tampilan setelah konfirmasi — PERMANEN ── */}
+      {status==="done" && buyerConfirmed && (
+        <div className="buyer-thankyou-box">
+          <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
+          <p className="buyer-thankyou-sub">
+            Pesanan kamu sudah kami tandai selesai.<br/>
+            Semoga puas dengan produk Parevie 💛
+          </p>
+          <a
+            href={`https://wa.me/${WA_ADMIN}?text=Halo+Parevie%2C+saya+butuh+bantuan+mengenai+pesanan+saya`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-wa-help">
+            <Ic.WA/> Butuh Bantuan? Hubungi Kami
+          </a>
         </div>
       )}
 
       <div className="chat-msgs" ref={chatRef}>
-        {msgs.map(m => (
-          <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
-            {m.from === "system"
-              ? <div className="csys">{m.text}</div>
-              : <><div className={`cbubble ${m.from === "buyer" ? "bubble-buyer" : "bubble-admin"}`}>{m.text}</div>
-                <span className="ctime">{m.from === "buyer" ? "Saya" : "👤 Admin"}</span></>}
+        {msgs.map(m=>(
+          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
+            {m.from==="system"
+              ?<div className="csys">{m.text}</div>
+              :<><div className={`cbubble ${m.from==="buyer"?"bubble-buyer":"bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from==="buyer"?"Saya":"👤 Admin"}</span></>}
           </div>
         ))}
       </div>
       <div className="chat-inp-row">
-        <input className="finput" style={{ flex: 1 }} placeholder="Ketik pesan ke admin…"
-          value={txt} onChange={e => setTxt(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && sendChat()} />
-        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send /></button>
+        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e=>setTxt(e.target.value)}
+          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
       </div>
     </div>
   );
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
-function AdminLogin({ onLogin }) {
-  const [email, setEmail] = useState("");
+function AdminLogin({onLogin}) {
+  const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error,    setError]    = useState("");
+  const [loading,  setLoading]  = useState(false);
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
       onLogin();
-    } catch (err) {
-      setError("Email atau password salah.");
-      console.error(err);
-    }
+    } catch { setError("Email atau password salah."); }
     setLoading(false);
   };
 
@@ -582,19 +607,19 @@ function AdminLogin({ onLogin }) {
       <h3>Login Admin</h3>
       <p>Masukkan email dan password admin</p>
       <form onSubmit={handleLogin}>
-        <div className="fg">
+        <div className="fg" style={{marginBottom:10}}>
           <label>Email</label>
-          <input type="email" className="finput" placeholder="admin@example.com"
-            value={email} onChange={e => setEmail(e.target.value)} required />
+          <input type="email" className="finput" placeholder="admin@email.com"
+            value={email} onChange={e=>setEmail(e.target.value)} required/>
         </div>
-        <div className="fg">
+        <div className="fg" style={{marginBottom:10}}>
           <label>Password</label>
           <input type="password" className="finput" placeholder="Password"
-            value={password} onChange={e => setPassword(e.target.value)} required />
+            value={password} onChange={e=>setPassword(e.target.value)} required/>
         </div>
-        {error && <p className="errmsg">{error}</p>}
-        <button type="submit" className="btn-save" style={{ width: "100%", marginTop: 10 }} disabled={loading}>
-          {loading ? "⏳ Login..." : "Masuk"}
+        {error&&<p className="errmsg">{error}</p>}
+        <button type="submit" className="btn-save" style={{width:"100%",marginTop:10}} disabled={loading}>
+          {loading?"⏳ Login…":"Masuk"}
         </button>
       </form>
     </div>
@@ -602,7 +627,7 @@ function AdminLogin({ onLogin }) {
 }
 
 // ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
-function AdminChatPanel({ onLogout }) {
+function AdminChatPanel({onLogout}) {
   const [orders,  setOrders]  = useState([]);
   const [selOrd,  setSelOrd]  = useState(null);
   const [msgs,    setMsgs]    = useState([]);
@@ -626,14 +651,10 @@ function AdminChatPanel({ onLogout }) {
 
   useEffect(()=>{
     if (!selOrd?.id) return;
-    const unsub = onSnapshot(doc(db,"orders",selOrd.id), snap=>{
-      if (snap.exists()) {
-        setSelOrd(prev=>({...prev, ...snap.data(), id:snap.id}));
-      } else {
-        setSelOrd(null);
-      }
+    return onSnapshot(doc(db,"orders",selOrd.id), snap=>{
+      if (snap.exists()) setSelOrd(prev=>({...prev,...snap.data(),id:snap.id}));
+      else setSelOrd(null);
     });
-    return ()=>unsub();
   },[selOrd?.id]);
 
   const send = async () => {
@@ -649,43 +670,35 @@ function AdminChatPanel({ onLogout }) {
   const updStatus = async (s) => {
     if (!selOrd) return;
     try {
-      await updateDoc(doc(db, "orders", selOrd.id), {
-        status: s,
-        updatedAt: serverTimestamp(),
-      });
-      setSelOrd(o=>({...o, status:s}));
-
-      if (s === "confirmed" && selOrd.productId) {
+      await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
+      setSelOrd(o=>({...o,status:s}));
+      if (s==="confirmed"&&selOrd.productId) {
         try {
-          const prodRef = doc(db,"products",selOrd.productId);
-          const prodSnap = await getDoc(prodRef);
+          const prodRef=doc(db,"products",selOrd.productId);
+          const prodSnap=await getDoc(prodRef);
           if (prodSnap.exists()) {
-            const curStok = Number(prodSnap.data().stock ?? prodSnap.data().size ?? 0);
-            if (curStok > 0) {
-              await updateDoc(prodRef,{ stock: curStok - 1, updatedAt: serverTimestamp() });
-            }
+            const cur=Number(prodSnap.data().stock??prodSnap.data().size??0);
+            if (cur>0) await updateDoc(prodRef,{stock:cur-1,updatedAt:serverTimestamp()});
           }
         } catch(e){ console.warn("Gagal kurangi stok:",e.message); }
       }
-
-      const statusMsg = {
-        confirmed: "✅ Pesanan dikonfirmasi! Sedang disiapkan untuk dikirim.",
-        shipped:   "🚚 Pesanan sedang dalam perjalanan ke alamatmu!",
-        done:      "🎉 Pesanan selesai! Terima kasih sudah berbelanja di Parevie 💛",
-        cancelled: "❌ Pesanan dibatalkan. Hubungi admin untuk info lebih lanjut.",
+      const statusMsg={
+        confirmed:"✅ Pesanan dikonfirmasi! Sedang disiapkan untuk dikirim.",
+        shipped:"🚚 Pesanan sedang dalam perjalanan ke alamatmu!",
+        done:"🎉 Pesanan selesai! Terima kasih sudah berbelanja di Parevie 💛",
+        cancelled:"❌ Pesanan dibatalkan. Hubungi admin untuk info lebih lanjut.",
       };
       if (statusMsg[s]) {
         await addDoc(collection(db,`orders/${selOrd.id}/chats`),{
-          from:"system", text:statusMsg[s], createdAt:serverTimestamp(),
+          from:"system",text:statusMsg[s],createdAt:serverTimestamp(),
         });
       }
     } catch(e){ alert("Gagal update status: "+e.message); }
   };
 
   const deleteMsg = async (chatId) => {
-    try {
-      await deleteDoc(doc(db,`orders/${selOrd.id}/chats`,chatId));
-    } catch(e){ alert("Gagal hapus: "+e.message); }
+    try { await deleteDoc(doc(db,`orders/${selOrd.id}/chats`,chatId)); }
+    catch(e){ alert("Gagal hapus: "+e.message); }
     setDelConf(null);
   };
 
@@ -695,16 +708,16 @@ function AdminChatPanel({ onLogout }) {
     catch(e){ alert("Gagal: "+e.message); }
   };
 
-  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",
+  const SC={pending:"#c9a84c",paid_pending_confirm:"#7c6af5",
     confirmed:"#4caf82",shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
-  const SL = {pending:"Pending",paid_pending_confirm:"Sudah Bayar",
+  const SL={pending:"Pending",paid_pending_confirm:"Sudah Bayar",
     confirmed:"Konfirmasi",shipped:"Kirim",done:"Selesai",cancelled:"Batal"};
 
   return (
     <div className="acp">
-      <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
         <h3 className="acp-ttl"><Ic.Bell/> Pesanan Masuk</h3>
-        <button className="btn-cancel" style={{padding:"4px 10px"}} onClick={onLogout}>Logout Admin</button>
+        <button className="btn-cancel" style={{padding:"4px 10px"}} onClick={onLogout}>Logout</button>
       </div>
       {!selOrd ? (
         <div className="acp-list">
@@ -718,7 +731,7 @@ function AdminChatPanel({ onLogout }) {
               </div>
               <div style={{flexShrink:0,textAlign:"right"}}>
                 <p className="acp-price">{fRp(o.price)}</p>
-                <span className="acp-status" style={{color:SC[o.status]||"#888",textTransform:"uppercase",fontSize:".68rem",fontWeight:700}}>
+                <span style={{color:SC[o.status]||"#888",textTransform:"uppercase",fontSize:".68rem",fontWeight:700}}>
                   {SL[o.status]||o.status||"pending"}
                 </span>
               </div>
@@ -730,7 +743,7 @@ function AdminChatPanel({ onLogout }) {
           <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
             <button type="button" className="btn-back" onClick={()=>setSelOrd(null)}>← Kembali</button>
             <button type="button" className="btn-del-order" onClick={()=>deleteOrder(selOrd.id)}>
-              <Ic.Trash/> Hapus Pesanan
+              <Ic.Trash/> Hapus
             </button>
           </div>
           <div className="acp-order-info">
@@ -738,44 +751,29 @@ function AdminChatPanel({ onLogout }) {
             <p>👤 {selOrd.buyerName} · 📱 {selOrd.buyerPhone}</p>
             <p>📍 {selOrd.address}</p>
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
+            {selOrd.buyerConfirmed&&<p style={{color:"var(--green)",fontWeight:600}}>✅ Buyer sudah konfirmasi terima</p>}
           </div>
-
           <div className="acp-status-row">
-            {Object.entries(SL).map(([k, v]) => {
-              let disabled = false;
-              if (k === "paid_pending_confirm" && selOrd.status !== "pending") disabled = true;
-              if (k === "confirmed" && selOrd.status !== "paid_pending_confirm") disabled = true;
-              if (k === "shipped" && selOrd.status !== "confirmed") disabled = true;
-              if (k === "done" && selOrd.status !== "shipped") disabled = true;
-              if (k === "pending" || k === "cancelled") disabled = false;
-
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  className={`btn-status${selOrd.status === k ? " on" : ""}`}
-                  style={selOrd.status === k ? { background: SC[k], borderColor: SC[k] } : {}}
-                  onClick={() => updStatus(k)}
-                  disabled={disabled}
-                >
-                  {v}
-                </button>
-              );
-            })}
+            {Object.entries(SL).map(([k,v])=>(
+              <button key={k} type="button"
+                className={`btn-status${selOrd.status===k?" on":""}`}
+                style={selOrd.status===k?{background:SC[k],borderColor:SC[k]}:{}}
+                onClick={()=>updStatus(k)}>{v}
+              </button>
+            ))}
           </div>
-
           <div className="chat-msgs" ref={chatRef} style={{height:220}}>
             {msgs.map(m=>(
               <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
                 {m.from==="system"
                   ?<div className="csys">{m.text}</div>
-                  :<div style={{display:"flex",flexDirection:"column",alignItems:m.from==="admin"?"flex-end":"flex-start",gap:2}}>
-                    <div style={{display:"flex",alignItems:"flex-end",gap:4,flexDirection:m.from==="admin"?"row-reverse":"row"}}>
+                  :<div style={{display:"flex",flexDirection:"column",
+                      alignItems:m.from==="admin"?"flex-end":"flex-start",gap:2}}>
+                    <div style={{display:"flex",alignItems:"flex-end",gap:4,
+                        flexDirection:m.from==="admin"?"row-reverse":"row"}}>
                       <div className={`cbubble ${m.from==="admin"?"bubble-admin":"bubble-buyer"}`}>{m.text}</div>
                       <button type="button" className="msg-del-btn"
-                        onClick={()=>setDelConf(m.id)} title="Hapus pesan">
-                        <Ic.Trash/>
-                      </button>
+                        onClick={()=>setDelConf(m.id)}><Ic.Trash/></button>
                     </div>
                     <span className="ctime">{m.from==="admin"?"👑 Admin":"👤 "+selOrd.buyerName}</span>
                   </div>
@@ -783,15 +781,13 @@ function AdminChatPanel({ onLogout }) {
               </div>
             ))}
           </div>
-
           {delConf&&(
             <div className="del-confirm-bar">
               <span>Hapus pesan ini?</span>
-              <button type="button" className="btn-yes-del" onClick={()=>deleteMsg(delConf)}>Ya, Hapus</button>
+              <button type="button" className="btn-yes-del" onClick={()=>deleteMsg(delConf)}>Ya</button>
               <button type="button" className="btn-no-del" onClick={()=>setDelConf(null)}>Batal</button>
             </div>
           )}
-
           <div className="chat-inp-row">
             <input className="finput" style={{flex:1}} placeholder="Balas pesan pembeli…"
               value={txt} onChange={e=>setTxt(e.target.value)}
@@ -851,12 +847,9 @@ function ProductDetail({p, onOrder}) {
 function ProductForm({initial,onSave,onCancel,saving}) {
   const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
   const [f,setF]=useState(initial?{...blank,...initial}:blank);
-  const [iu,setIU]=useState("");
-  const [file,setFile]=useState(null);
-  const [prev,setPrev]=useState(getImg(initial||{}));
-  const [up,setUp]=useState(false);
+  const [iu,setIU]=useState(""); const [file,setFile]=useState(null);
+  const [prev,setPrev]=useState(getImg(initial||{})); const [up,setUp]=useState(false);
   const ch=(k,v)=>setF(x=>({...x,[k]:v}));
-
   const submit=async()=>{
     if(!f.name||!f.price) return alert("Nama & harga wajib!");
     let images=Array.isArray(f.images)?[...f.images]:[];
@@ -864,28 +857,24 @@ function ProductForm({initial,onSave,onCancel,saving}) {
       setUp(true);
       try{
         const r=ref(storage,`products/${Date.now()}_${file.name}`);
-        await uploadBytes(r,file);
-        const url=await getDownloadURL(r);
+        await uploadBytes(r,file); const url=await getDownloadURL(r);
         images=[url,...images.filter(i=>i!==url)];
       }catch(e){alert("Upload gagal: "+e.message);setUp(false);return;}
       setUp(false);
     }
     onSave({...f,price:Number(f.price),stock:Number(f.stock),rating:Number(f.rating),sold:Number(f.sold),images});
   };
-
   return (
     <div className="pform">
       <h2 className="pform-ttl">{initial?.id?"Edit Produk":"Tambah Produk"}</h2>
       <div className="pform-imgs">
-        <img src={prev||IMG_PH} alt="prev" className="pform-prev"
-          onError={e=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
+        <img src={prev||IMG_PH} alt="prev" className="pform-prev" onError={e=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
         <div className="pform-imgctl">
           <label className="btn-upload"><Ic.Upload/> Upload Foto
             <input type="file" accept="image/*" hidden onChange={e=>{const fl=e.target.files[0];if(!fl)return;setFile(fl);setPrev(URL.createObjectURL(fl));}}/>
           </label>
           <div className="url-row">
-            <input className="finput" placeholder="atau paste URL…" value={iu}
-              onChange={e=>setIU(e.target.value)}
+            <input className="finput" placeholder="atau paste URL…" value={iu} onChange={e=>setIU(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}/>
             <button type="button" className="btn-addurl" onClick={()=>{if(iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}>+</button>
           </div>
@@ -910,7 +899,7 @@ function ProductForm({initial,onSave,onCancel,saving}) {
       </div>
       <div className="pform-checks">
         <label className="chk"><input type="checkbox" checked={!!f.bestSeller} onChange={e=>ch("bestSeller",e.target.checked)}/> Best Seller</label>
-        <label className="chk"><input type="checkbox" checked={!!f.isActive}   onChange={e=>ch("isActive",e.target.checked)}/> Aktif/Tampil</label>
+        <label className="chk"><input type="checkbox" checked={!!f.isActive} onChange={e=>ch("isActive",e.target.checked)}/> Aktif/Tampil</label>
       </div>
       <div className="form-acts">
         <button type="button" className="btn-cancel" onClick={onCancel}>Batal</button>
@@ -937,61 +926,59 @@ function ConfirmDelete({p,onConfirm,onCancel,saving}) {
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────
 export default function App() {
-  const [products,    setProducts]    = useState([]);
-  const [loading,     setLoading]     = useState(true);
-  const [search,      setSearch]      = useState("");
-  const [cat,         setCat]         = useState("All");
-  const [sort,        setSort]        = useState("newest");
-  const [selected,    setSelected]    = useState(null);
-  const [orderProd,   setOrderProd]   = useState(null);
-  const [editP,       setEditP]       = useState(null);
-  const [delP,        setDelP]        = useState(null);
-  const [showForm,    setShowForm]    = useState(false);
-  const [isAdmin,     setIsAdmin]     = useState(false);
-  const [showLogin,   setShowLogin]   = useState(false);
-  const [showACP,     setShowACP]     = useState(false);
-  const [showMyOrders,setShowMyOrders]= useState(false);
-  const [saving,      setSaving]      = useState(false);
-  const [dark,        setDark]        = useState(true);
-  const [menuOpen,    setMenuOpen]    = useState(false);
-  const [notifCnt,    setNotifCnt]    = useState(0);
+  const [products,     setProducts]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [search,       setSearch]       = useState("");
+  const [cat,          setCat]          = useState("All");
+  const [sort,         setSort]         = useState("newest");
+  const [selected,     setSelected]     = useState(null);
+  const [orderProd,    setOrderProd]    = useState(null);
+  const [editP,        setEditP]        = useState(null);
+  const [delP,         setDelP]         = useState(null);
+  const [showForm,     setShowForm]     = useState(false);
+  const [isAdmin,      setIsAdmin]      = useState(false);
+  const [showLogin,    setShowLogin]    = useState(false);
+  const [showACP,      setShowACP]      = useState(false);
+  const [showMyOrders, setShowMyOrders] = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [dark,         setDark]         = useState(true);
+  const [menuOpen,     setMenuOpen]     = useState(false);
+  const [notifCnt,     setNotifCnt]     = useState(0);
   const menuRef = useRef(null);
 
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        const adminEmail = import.meta.env.VITE_ADMIN_EMAIL || "awianton2@gmail.com";
-        if (user.email === adminEmail) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-          signOut(auth);
-        }
-      } else {
-        setIsAdmin(false);
-      }
-    });
-    return () => unsub();
-  }, []);
+  // Tutup menu saat klik luar
+  useEffect(()=>{
+    const h=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("mousedown",h);
+    return ()=>document.removeEventListener("mousedown",h);
+  },[]);
 
+  // Firebase Auth listener
+  useEffect(()=>{
+    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL||"awianton2@gmail.com";
+    return onAuthStateChanged(auth,(user)=>{
+      if (user&&user.email===adminEmail) setIsAdmin(true);
+      else { setIsAdmin(false); if(user) signOut(auth); }
+    });
+  },[]);
+
+  // Produk realtime
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
-    const u=onSnapshot(q,
+    return onSnapshot(q,
       s=>{setProducts(s.docs.map(d=>({id:d.id,...d.data()})));setLoading(false);},
       e=>{console.error(e);setLoading(false);}
     );
-    return ()=>u();
   },[]);
 
+  // Notif badge admin
   useEffect(()=>{
     if(!isAdmin) return;
-    const q=query(collection(db,"orders"),
-      where("status","in",["pending","paid_pending_confirm"]));
+    const q=query(collection(db,"orders"),where("status","in",["pending","paid_pending_confirm"]));
     return onSnapshot(q,s=>setNotifCnt(s.size));
   },[isAdmin]);
 
   const GENDERS=["All","Male","Female","Unisex"];
-
   const matchGender=(p,tab)=>{
     if(tab==="All") return true;
     return normGender(p.gender||"").toLowerCase()===tab.toLowerCase();
@@ -1027,17 +1014,15 @@ export default function App() {
   };
 
   const closeMenu=()=>setMenuOpen(false);
-  const handleLogout = () => {
-    signOut(auth);
-    setIsAdmin(false);
-    setShowACP(false);
-  };
+  const handleLogout=()=>{ signOut(auth); setIsAdmin(false); setShowACP(false); };
+
+  // Hitung pesanan aktif user dari localStorage
+  const myActiveOrders = lsGet().filter(o=>o.status&&!["done","cancelled"].includes(o.status)).length;
 
   return (
     <>
       <style>{CSS}</style>
       <div className={`app ${dark?"dark":"light"}`}>
-        <Toaster position="top-right" toastOptions={{ duration: 4000, style: { background: 'var(--bg2)', color: 'var(--text)' } }} />
 
         <header className="hdr">
           <div className="hinner">
@@ -1049,17 +1034,13 @@ export default function App() {
               <button type="button" className="icon-btn" onClick={()=>setDark(d=>!d)}>
                 {dark?<Ic.Sun/>:<Ic.Moon/>}
               </button>
-              {!isAdmin && (
+              {!isAdmin&&(
                 <button type="button" className="icon-btn" onClick={()=>setShowMyOrders(true)}>
                   <Ic.Chat/>
-                  {(() => {
-                    const orders = JSON.parse(localStorage.getItem('parevie_my_orders') || '[]');
-                    const pendingCount = orders.filter(o => o.status && !['done', 'cancelled'].includes(o.status)).length;
-                    return pendingCount > 0 && <span className="notif-dot">{pendingCount}</span>;
-                  })()}
+                  {myActiveOrders>0&&<span className="notif-dot">{myActiveOrders}</span>}
                 </button>
               )}
-              {isAdmin && (
+              {isAdmin&&(
                 <button type="button" className="icon-btn notif-btn" onClick={()=>{setShowACP(true);closeMenu();}}>
                   <Ic.Bell/>
                   {notifCnt>0&&<span className="notif-dot">{notifCnt}</span>}
@@ -1071,11 +1052,11 @@ export default function App() {
                 </button>
                 {menuOpen&&(
                   <div className="dropdown">
-                    {!isAdmin ? (
+                    {!isAdmin?(
                       <button type="button" className="dd-item" onClick={()=>{setShowLogin(true);closeMenu();}}>
                         <Ic.Admin/> Login Admin
                       </button>
-                    ) : (
+                    ):(
                       <>
                         <div className="dd-label">Admin Panel</div>
                         <button type="button" className="dd-item gold" onClick={()=>{setEditP(null);setShowForm(true);closeMenu();}}>
@@ -1143,8 +1124,7 @@ export default function App() {
             <div className="grid2">
               {list.map(p=>(
                 <ProductCard key={p.id} p={p} onSelect={setSelected} isAdmin={isAdmin}
-                  onEdit={p=>{setEditP(p);setShowForm(true);}}
-                  onDelete={setDelP}/>
+                  onEdit={p=>{setEditP(p);setShowForm(true);}} onDelete={setDelP}/>
               ))}
             </div>
           )}
@@ -1166,20 +1146,19 @@ export default function App() {
           {delP&&<ConfirmDelete p={delP} onConfirm={handleDelete} onCancel={()=>setDelP(null)} saving={saving}/>}
         </Modal>
         <Modal open={showLogin}      onClose={()=>setShowLogin(false)}>
-          <AdminLogin onLogin={()=>{setShowLogin(false);}} />
+          <AdminLogin onLogin={()=>setShowLogin(false)}/>
         </Modal>
         <Modal open={showMyOrders}   onClose={()=>setShowMyOrders(false)}>
           <UserChatPanel/>
         </Modal>
         <Modal open={showACP}        onClose={()=>setShowACP(false)}>
-          <AdminChatPanel onLogout={handleLogout} />
+          <AdminChatPanel onLogout={handleLogout}/>
         </Modal>
       </div>
     </>
   );
 }
 
-// ── CSS ───────────────────────────────────────────────────────────────────
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -1325,7 +1304,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .chat-inp-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);flex-shrink:0}
 .btn-send{width:40px;height:40px;border-radius:10px;border:none;background:var(--gold);color:#0d0d14;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
 .btn-send:hover{background:var(--gold2)}
-.btn-back-chat{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1rem;padding:0 4px;transition:opacity .2s}
+.btn-back-chat{background:none;border:none;color:var(--gold);cursor:pointer;font-size:1rem;padding:0 4px}
 .msg-del-btn{width:22px;height:22px;border-radius:6px;border:none;background:transparent;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:all .2s;flex-shrink:0}
 .cmsg:hover .msg-del-btn{opacity:1}
 .msg-del-btn:hover{background:var(--red);color:#fff}
@@ -1333,8 +1312,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .del-confirm-bar span{flex:1}
 .btn-yes-del{padding:4px 12px;border-radius:6px;border:none;background:var(--red);color:#fff;font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
 .btn-no-del{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
+.buyer-confirm-box{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
+.btn-buyer-confirm{width:100%;padding:11px;border-radius:10px;border:none;background:#4caf82;color:#fff;font-weight:700;font-size:.88rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
+.btn-buyer-confirm:hover:not(:disabled){background:#3d9e70}
+.btn-buyer-confirm:disabled{opacity:.6;cursor:not-allowed}
+.buyer-thankyou-box{padding:14px 16px;background:#4caf8218;border-bottom:1px solid #4caf8233;flex-shrink:0;text-align:center}
+.buyer-thankyou-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--green);margin-bottom:4px;font-weight:700}
+.buyer-thankyou-sub{font-size:.8rem;color:var(--text2);line-height:1.6;margin-bottom:10px}
+.btn-wa-help{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#25d366;color:#fff;font-weight:600;font-size:.8rem;text-decoration:none;transition:all .2s}
+.btn-wa-help:hover{background:#1da851}
 .acp{padding:16px;min-height:380px}
-.acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:14px;display:flex;align-items:center;gap:7px;color:var(--text)}
+.acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:0;display:flex;align-items:center;gap:7px;color:var(--text)}
 .acp-list{display:flex;flex-direction:column;gap:8px}
 .acp-item{display:flex;justify-content:space-between;gap:10px;padding:12px;background:var(--bg3);border-radius:10px;cursor:pointer;border:1px solid var(--border);transition:border-color .2s}
 .acp-item:hover{border-color:var(--gold)}
@@ -1343,9 +1331,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .acp-addr{font-size:.72rem;color:var(--text3)}
 .acp-price{font-weight:700;color:var(--gold);font-size:.85rem;margin-bottom:4px}
 .acp-detail{display:flex;flex-direction:column;gap:10px}
-.btn-back{padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif;transition:all .2s}
+.btn-back{padding:5px 12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-size:.8rem;font-family:'DM Sans',sans-serif}
 .btn-back:hover{background:var(--bg3)}
-.btn-del-order{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid #e05a5a44;background:transparent;color:var(--red);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif;transition:all .2s}
+.btn-del-order{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid #e05a5a44;background:transparent;color:var(--red);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif}
 .btn-del-order:hover{background:#e05a5a18}
 .acp-order-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
 .acp-status-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px}
@@ -1389,3 +1377,18 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .cbox p{color:var(--text2);margin-bottom:20px;font-size:.85rem;line-height:1.6}
 @media(max-width:400px){.grid2{gap:7px}.pform-grid{grid-template-columns:1fr}}
 `;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
