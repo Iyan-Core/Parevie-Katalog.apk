@@ -424,12 +424,10 @@ function UserChatPanel() {
   };
 
   // ── Konfirmasi terima pesanan ──
-  // Sekarang tombol muncul saat status === "shipped" dan ubah status menjadi "done"
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
-      // Ubah status menjadi "done" dan set buyerConfirmed = true
       await updateDoc(doc(db,"orders",selOrd),{
         status: "done",
         buyerConfirmed: true,
@@ -447,6 +445,8 @@ function UserChatPanel() {
       lsSet(arr);
       setMyOrders([...arr]);
       setOrdData(prev=>({...prev, status:"done", buyerConfirmed:true}));
+      // Tampilkan popup ucapan terima kasih
+      alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
     } catch(e){ alert("Gagal konfirmasi: "+e.message); }
     setConfirming(false);
   };
@@ -510,8 +510,7 @@ function UserChatPanel() {
         {SL[status]||status}
       </div>
 
-      {/* ── Tombol konfirmasi terima pesanan ── */}
-      {/* Muncul hanya saat status === "shipped" */}
+      {/* ─── TOMBOL KONFIRMASI TERIMA ─── */}
       {status === "shipped" && !buyerConfirmed && (
         <div className="buyer-confirm-box">
           <button
@@ -523,7 +522,7 @@ function UserChatPanel() {
         </div>
       )}
 
-      {/* ── Tampilan setelah konfirmasi (status done) ── */}
+      {/* ─── UCAPAN TERIMA KASIH ─── */}
       {status === "done" && buyerConfirmed && (
         <div className="buyer-thankyou-box">
           <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
@@ -603,8 +602,6 @@ function AdminLogin({onLogin}) {
   );
 }
 
-
-
 // ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
 function AdminChatPanel({onLogout}) {
   const [orders,  setOrders]  = useState([]);
@@ -648,9 +645,9 @@ function AdminChatPanel({onLogout}) {
 
   const updStatus = async (s) => {
     if (!selOrd) return;
-    // Validasi status yang diizinkan berdasarkan status saat ini
+    // Validasi status yang diizinkan
     const current = selOrd.status;
-    const allowed = {
+    const allowedMap = {
       pending:        ['confirmed'],
       paid_pending_confirm: ['confirmed'],
       confirmed:      ['shipped'],
@@ -658,8 +655,8 @@ function AdminChatPanel({onLogout}) {
       done:           [],
       cancelled:      []
     };
-    if (!allowed[current]?.includes(s) && !allowed[current]?.includes(s)) {
-      // Jika tidak diizinkan, tidak melakukan apa-apa
+    if (!allowedMap[current]?.includes(s)) {
+      // Tidak diizinkan, abaikan
       return;
     }
     try {
@@ -706,7 +703,6 @@ function AdminChatPanel({onLogout}) {
   const SL={pending:"Pending",paid_pending_confirm:"Sudah Bayar",
     confirmed:"Konfirmasi",shipped:"Kirim",done:"Selesai",cancelled:"Batal"};
 
-  // ── Fungsi untuk menentukan apakah tombol status aktif ──
   const isStatusAllowed = (targetStatus) => {
     const current = selOrd?.status || "pending";
     if (current === "pending" || current === "paid_pending_confirm") {
@@ -764,7 +760,6 @@ function AdminChatPanel({onLogout}) {
 
           {/* ─── TOMBOL STATUS ─── */}
           <div className="acp-status-row">
-            {/* Tombol Konfirmasi */}
             <button
               type="button"
               className={`btn-status${selOrd.status==="confirmed"?" on":""}`}
@@ -774,7 +769,6 @@ function AdminChatPanel({onLogout}) {
             >
               Konfirmasi
             </button>
-            {/* Tombol Kirim */}
             <button
               type="button"
               className={`btn-status${selOrd.status==="shipped"?" on":""}`}
@@ -784,7 +778,6 @@ function AdminChatPanel({onLogout}) {
             >
               Kirim
             </button>
-            {/* Tombol Selesai */}
             <button
               type="button"
               className={`btn-status${selOrd.status==="done"?" on":""}`}
@@ -794,7 +787,6 @@ function AdminChatPanel({onLogout}) {
             >
               Selesai
             </button>
-            {/* Tombol Batal (hanya aktif saat pending) */}
             <button
               type="button"
               className={`btn-status${selOrd.status==="cancelled"?" on":""}`}
