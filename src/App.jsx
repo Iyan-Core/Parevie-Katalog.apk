@@ -358,7 +358,142 @@ function OrderModal({p}) {
   );
 }
 
-// ─── USER CHAT PANEL 
+// ─── USER CHAT PANEL ──────────────────────────────────────────────────────
+function UserChatPanel() {
+  const [selOrd,   setSelOrd]   = useState(null);
+  const [msgs,     setMsgs]     = useState([]);
+  const [txt,      setTxt]      = useState("");
+  const [ordData,  setOrdData]  = useState(null);
+  const [myOrders, setMyOrders] = useState(lsGet);
+  const [confirming, setConfirming] = useState(false);
+  const chatRef = useRef(null);
+
+  // Sync localStorage → state setiap buka panel
+  useEffect(()=>{ setMyOrders(lsGet()); },[]);
+
+  // Listen status semua pesanan secara realtime
+  useEffect(()=>{
+    if (myOrders.length===0) return;
+    const unsubs = myOrders.map(order=>{
+      return onSnapshot(doc(db,"orders",order.orderId), snap=>{
+        if (snap.exists()) {
+          const newStatus = snap.data().status;
+          const newBC     = snap.data().buyerConfirmed || false;
+          // Update localStorage
+          const arr = lsGet().map(o=>
+            o.orderId===order.orderId ? {...o, status:newStatus, buyerConfirmed:newBC} : o
+          );
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd===order.orderId) setOrdData(snap.data());
+        } else {
+          // Pesanan dihapus admin
+          const arr = lsGet().filter(o=>o.orderId!==order.orderId);
+          lsSet(arr); setMyOrders([...arr]);
+          if (selOrd===order.orderId) setSelOrd(null);
+        }
+      });
+    });
+    return ()=>unsubs.forEach(u=>u());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[myOrders.map(o=>o.orderId).join(","), selOrd]);
+
+  // Listen chat + order saat detail dibuka
+  useEffect(()=>{
+    if (!selOrd) return;
+    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
+    const u1=onSnapshot(q,snap=>{
+      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
+      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
+    });
+    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{
+      if (snap.exists()) setOrdData(snap.data());
+      else setSelOrd(null);
+    });
+    return ()=>{ u1(); u2(); };
+  },[selOrd]);
+
+  const sendChat = async () => {
+    if (!txt.trim()||!selOrd) return;
+    try {
+      await addDoc(collection(db,`orders/${selOrd}/chats`),{
+        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
+      });
+      setTxt("");
+    } catch(e){ alert("Gagal: "+e.message); }
+  };
+
+  // ── Konfirmasi terima pesanan ──
+  const handleBuyerConfirm = async () => {
+    if (!selOrd || confirming) return;
+    setConfirming(true);
+    try {
+      await updateDoc(doc(db,"orders",selOrd),{
+        status: "done",
+        buyerConfirmed: true,
+        buyerConfirmedAt: serverTimestamp(),
+      });
+      await addDoc(collection(db,`orders/${selOrd}/chats`),{
+        from:"system",
+        text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
+        createdAt:serverTimestamp(),
+      });
+      // Update localStorage
+      const arr = lsGet().map(o=>
+        o.orderId===selOrd ? {...o, status:"done", buyerConfirmed:true} : o
+      );
+      lsSet(arr);
+      setMyOrders([...arr]);
+      setOrdData(prev=>({...prev, status:"done", buyerConfirmed:true}));
+      // Tampilkan popup ucapan terima kasih
+      alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
+    } catch(e){ alert("Gagal konfirmasi: "+e.message); }
+    setConfirming(false);
+  };
+
+  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
+    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
+  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
+    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+
+  const WA_ADMIN = "6281328046768"; // ganti nomor WA admin
+
+  if (myOrders.length===0) return (
+    <div className="acp">
+      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <div className="empty" style={{padding:"40px 16px"}}>
+        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
+        <p>Pesanan akan muncul setelah checkout</p>
+      </div>
+    </div>
+  );
+
+  if (!selOrd) return (
+    <div className="acp">
+      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <div className="acp-list">
+        {myOrders.map(o=>{
+          const status = o.status||"pending";
+          return (
+            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
+              <img src={o.productImg||IMG_PH} alt={o.productName}
+                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
+                onError={e=>{e.target.src=IMG_PH;}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <p className="acp-pname">{o.productName}</p>
+                <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
+                <span style={{fontSize:".7rem",fontWeight:600,color:SC[status]||"#888"}}>
+                  {SL[status]||status}
+                </span>
+              </div>
+              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
 
 function UserChatPanel() {
   const [selOrd,   setSelOrd]   = useState(null);
@@ -569,8 +704,6 @@ function UserChatPanel() {
       </div>
     </div>
   );
-}
-
 
   const status      = ordData?.status||"pending";
   const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
