@@ -358,7 +358,8 @@ function OrderModal({p}) {
   );
 }
 
-// ─── USER CHAT PANEL ──────────────────────────────────────────────────────
+// ─── USER CHAT PANEL 
+
 function UserChatPanel() {
   const [selOrd,   setSelOrd]   = useState(null);
   const [msgs,     setMsgs]     = useState([]);
@@ -368,101 +369,108 @@ function UserChatPanel() {
   const [confirming, setConfirming] = useState(false);
   const chatRef = useRef(null);
 
-  // Sync localStorage → state setiap buka panel
-  useEffect(()=>{ setMyOrders(lsGet()); },[]);
+  useEffect(() => { setMyOrders(lsGet()); }, []);
 
-  // Listen status semua pesanan secara realtime
-  useEffect(()=>{
-    if (myOrders.length===0) return;
-    const unsubs = myOrders.map(order=>{
-      return onSnapshot(doc(db,"orders",order.orderId), snap=>{
+  // Listener untuk semua order (update localStorage)
+  useEffect(() => {
+    if (myOrders.length === 0) return;
+    const unsubs = myOrders.map(order => {
+      return onSnapshot(doc(db, "orders", order.orderId), snap => {
         if (snap.exists()) {
-          const newStatus = snap.data().status;
-          const newBC     = snap.data().buyerConfirmed || false;
-          // Update localStorage
-          const arr = lsGet().map(o=>
-            o.orderId===order.orderId ? {...o, status:newStatus, buyerConfirmed:newBC} : o
+          const data = snap.data();
+          const newStatus = data.status || "pending";
+          const newBC = data.buyerConfirmed || false;
+          const arr = lsGet().map(o =>
+            o.orderId === order.orderId ? { ...o, status: newStatus, buyerConfirmed: newBC } : o
           );
           lsSet(arr);
           setMyOrders([...arr]);
-          if (selOrd===order.orderId) setOrdData(snap.data());
+          if (selOrd === order.orderId) {
+            setOrdData(prev => ({ ...prev, ...data, status: newStatus, buyerConfirmed: newBC }));
+          }
         } else {
-          // Pesanan dihapus admin
-          const arr = lsGet().filter(o=>o.orderId!==order.orderId);
-          lsSet(arr); setMyOrders([...arr]);
-          if (selOrd===order.orderId) setSelOrd(null);
+          const arr = lsGet().filter(o => o.orderId !== order.orderId);
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd === order.orderId) setSelOrd(null);
         }
       });
     });
-    return ()=>unsubs.forEach(u=>u());
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[myOrders.map(o=>o.orderId).join(","), selOrd]);
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myOrders.map(o => o.orderId).join(","), selOrd]);
 
-  // Listen chat + order saat detail dibuka
-  useEffect(()=>{
+  // Listener chat + order detail
+  useEffect(() => {
     if (!selOrd) return;
-    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
-    const u1=onSnapshot(q,snap=>{
-      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
+    const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
+    const u1 = onSnapshot(q, snap => {
+      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
     });
-    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{
-      if (snap.exists()) setOrdData(snap.data());
-      else setSelOrd(null);
+    const u2 = onSnapshot(doc(db, "orders", selOrd), snap => {
+      if (snap.exists()) {
+        const data = snap.data();
+        setOrdData({ id: snap.id, ...data });
+        // Update localStorage juga
+        const arr = lsGet().map(o =>
+          o.orderId === selOrd ? { ...o, status: data.status, buyerConfirmed: data.buyerConfirmed || false } : o
+        );
+        lsSet(arr);
+        setMyOrders([...arr]);
+      } else {
+        setSelOrd(null);
+      }
     });
-    return ()=>{ u1(); u2(); };
-  },[selOrd]);
+    return () => { u1(); u2(); };
+  }, [selOrd]);
 
   const sendChat = async () => {
-    if (!txt.trim()||!selOrd) return;
+    if (!txt.trim() || !selOrd) return;
     try {
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
+      await addDoc(collection(db, `orders/${selOrd}/chats`), {
+        from: "buyer", text: txt.trim(), createdAt: serverTimestamp(),
       });
       setTxt("");
-    } catch(e){ alert("Gagal: "+e.message); }
+    } catch (e) { alert("Gagal: " + e.message); }
   };
 
-  // ── Konfirmasi terima pesanan ──
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
-      await updateDoc(doc(db,"orders",selOrd),{
+      await updateDoc(doc(db, "orders", selOrd), {
         status: "done",
         buyerConfirmed: true,
         buyerConfirmedAt: serverTimestamp(),
       });
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"system",
-        text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
-        createdAt:serverTimestamp(),
+      await addDoc(collection(db, `orders/${selOrd}/chats`), {
+        from: "system",
+        text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
+        createdAt: serverTimestamp(),
       });
-      // Update localStorage
-      const arr = lsGet().map(o=>
-        o.orderId===selOrd ? {...o, status:"done", buyerConfirmed:true} : o
+      const arr = lsGet().map(o =>
+        o.orderId === selOrd ? { ...o, status: "done", buyerConfirmed: true } : o
       );
       lsSet(arr);
       setMyOrders([...arr]);
-      setOrdData(prev=>({...prev, status:"done", buyerConfirmed:true}));
-      // Tampilkan popup ucapan terima kasih
+      setOrdData(prev => ({ ...prev, status: "done", buyerConfirmed: true }));
       alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
-    } catch(e){ alert("Gagal konfirmasi: "+e.message); }
+    } catch (e) { alert("Gagal konfirmasi: " + e.message); }
     setConfirming(false);
   };
 
-  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
-    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
-  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
-    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+  const SL = { pending: "⏳ Menunggu konfirmasi", paid_pending_confirm: "💰 Pembayaran diverifikasi",
+    confirmed: "✅ Dikonfirmasi", shipped: "🚚 Dalam pengiriman", done: "🎉 Selesai", cancelled: "❌ Dibatalkan" };
+  const SC = { pending: "#c9a84c", paid_pending_confirm: "#7c6af5", confirmed: "#4caf82",
+    shipped: "#29b6f6", done: "#4caf82", cancelled: "#e05a5a" };
+  const WA_ADMIN = "6281328046768";
 
-  const WA_ADMIN = "6281328046768"; // ganti nomor WA admin
-
-  if (myOrders.length===0) return (
+  if (myOrders.length === 0) return (
     <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-      <div className="empty" style={{padding:"40px 16px"}}>
-        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
+      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
+      <div className="empty" style={{ padding: "40px 16px" }}>
+        <p style={{ fontSize: "2rem" }}>🛒</p><h3>Belum ada pesanan</h3>
         <p>Pesanan akan muncul setelah checkout</p>
       </div>
     </div>
@@ -470,29 +478,99 @@ function UserChatPanel() {
 
   if (!selOrd) return (
     <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
       <div className="acp-list">
-        {myOrders.map(o=>{
-          const status = o.status||"pending";
+        {myOrders.map(o => {
+          const status = o.status || "pending";
           return (
-            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
-              <img src={o.productImg||IMG_PH} alt={o.productName}
-                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
-                onError={e=>{e.target.src=IMG_PH;}}/>
-              <div style={{flex:1,minWidth:0}}>
+            <div key={o.orderId} className="acp-item" onClick={() => setSelOrd(o.orderId)}>
+              <img src={o.productImg || IMG_PH} alt={o.productName}
+                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+                onError={e => { e.target.src = IMG_PH; }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="acp-pname">{o.productName}</p>
                 <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
-                <span style={{fontSize:".7rem",fontWeight:600,color:SC[status]||"#888"}}>
-                  {SL[status]||status}
+                <span style={{ fontSize: ".7rem", fontWeight: 600, color: SC[status] || "#888" }}>
+                  {SL[status] || status}
                 </span>
               </div>
-              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
+              <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>Chat →</span>
             </div>
           );
         })}
       </div>
     </div>
   );
+
+  // Ambil status dan buyerConfirmed DARI FIRESTORE (ordData) – jangan pakai localStorage
+  const status = ordData?.status || "pending";
+  const buyerConfirmed = ordData?.buyerConfirmed || false; // <--- PERBAIKAN: hanya dari Firestore
+
+  // Debug log (bisa dihapus setelah testing)
+  console.log("[UserChatPanel] status:", status, "buyerConfirmed:", buyerConfirmed);
+
+  return (
+    <div className="chat-wrap">
+      <div className="chat-hdr">
+        <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
+        <Ic.Chat /> <span>{ordData?.productName || "Pesanan"}</span>
+      </div>
+      <div className="status-bar" style={{
+        background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status]
+      }}>
+        {SL[status] || status}
+      </div>
+
+      {/* ─── TOMBOL KONFIRMASI TERIMA ─── */}
+      {status === "shipped" && !buyerConfirmed && (
+        <div className="buyer-confirm-box">
+          <button
+            className="btn-buyer-confirm"
+            onClick={handleBuyerConfirm}
+            disabled={confirming}>
+            {confirming ? "⏳ Mengonfirmasi…" : "✅ Saya Sudah Menerima Pesanan"}
+          </button>
+        </div>
+      )}
+
+      {/* ─── UCAPAN TERIMA KASIH ─── */}
+      {status === "done" && buyerConfirmed && (
+        <div className="buyer-thankyou-box">
+          <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
+          <p className="buyer-thankyou-sub">
+            Pesanan kamu sudah kami tandai selesai.<br />
+            Semoga puas dengan produk Parevie 💛
+          </p>
+          <a
+            href={`https://wa.me/${WA_ADMIN}?text=Halo+Parevie%2C+saya+butuh+bantuan+mengenai+pesanan+saya`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-wa-help">
+            <Ic.WA /> Butuh Bantuan? Hubungi Kami
+          </a>
+        </div>
+      )}
+
+      <div className="chat-msgs" ref={chatRef}>
+        {msgs.map(m => (
+          <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
+            {m.from === "system"
+              ? <div className="csys">{m.text}</div>
+              : <><div className={`cbubble ${m.from === "buyer" ? "bubble-buyer" : "bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from === "buyer" ? "Saya" : "👤 Admin"}</span></>}
+          </div>
+        ))}
+      </div>
+      <div className="chat-inp-row">
+        <input className="finput" style={{ flex: 1 }} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e => setTxt(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && sendChat()} />
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send /></button>
+      </div>
+    </div>
+  );
+}
+
 
   const status      = ordData?.status||"pending";
   const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
