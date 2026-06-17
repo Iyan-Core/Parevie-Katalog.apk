@@ -206,7 +206,6 @@ function OrderModal({p}) {
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
-      // Simpan ke localStorage
       const existing = lsGet();
       if (!existing.find(o=>o.orderId===oRef.id)) {
         lsSet([{orderId:oRef.id, productName:p.name, productImg:getImg(p),
@@ -243,7 +242,6 @@ function OrderModal({p}) {
         message:`💰 Pembayaran: ${p.name} — ${fRp(p.price)}`,
         read:false, createdAt:serverTimestamp(),
       });
-      // Update status di localStorage juga
       const arr = lsGet().map(o=>o.orderId===orderId?{...o,status:"paid_pending_confirm"}:o);
       lsSet(arr);
       setStep("chat");
@@ -368,10 +366,8 @@ function UserChatPanel() {
   const [confirming, setConfirming] = useState(false);
   const chatRef = useRef(null);
 
-  // Sync localStorage → state setiap buka panel
   useEffect(()=>{ setMyOrders(lsGet()); },[]);
 
-  // Listen status semua pesanan secara realtime
   useEffect(()=>{
     if (myOrders.length===0) return;
     const unsubs = myOrders.map(order=>{
@@ -379,7 +375,6 @@ function UserChatPanel() {
         if (snap.exists()) {
           const newStatus = snap.data().status;
           const newBC     = snap.data().buyerConfirmed || false;
-          // Update localStorage
           const arr = lsGet().map(o=>
             o.orderId===order.orderId ? {...o, status:newStatus, buyerConfirmed:newBC} : o
           );
@@ -387,7 +382,6 @@ function UserChatPanel() {
           setMyOrders([...arr]);
           if (selOrd===order.orderId) setOrdData(snap.data());
         } else {
-          // Pesanan dihapus admin
           const arr = lsGet().filter(o=>o.orderId!==order.orderId);
           lsSet(arr); setMyOrders([...arr]);
           if (selOrd===order.orderId) setSelOrd(null);
@@ -398,7 +392,6 @@ function UserChatPanel() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[myOrders.map(o=>o.orderId).join(","), selOrd]);
 
-  // Listen chat + order saat detail dibuka
   useEffect(()=>{
     if (!selOrd) return;
     const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
@@ -423,7 +416,6 @@ function UserChatPanel() {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  // ── Konfirmasi terima pesanan ──
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
@@ -438,15 +430,12 @@ function UserChatPanel() {
         text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
         createdAt:serverTimestamp(),
       });
-      // Update localStorage
       const arr = lsGet().map(o=>
         o.orderId===selOrd ? {...o, status:"done", buyerConfirmed:true} : o
       );
       lsSet(arr);
       setMyOrders([...arr]);
       setOrdData(prev=>({...prev, status:"done", buyerConfirmed:true}));
-      // Tampilkan popup ucapan terima kasih
-      alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
     } catch(e){ alert("Gagal konfirmasi: "+e.message); }
     setConfirming(false);
   };
@@ -456,7 +445,7 @@ function UserChatPanel() {
   const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
     shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
 
-  const WA_ADMIN = "6281328046768"; // ganti nomor WA admin
+  const WA_ADMIN = "6281328046768";
 
   if (myOrders.length===0) return (
     <div className="acp">
@@ -494,217 +483,6 @@ function UserChatPanel() {
     </div>
   );
 
-
-function UserChatPanel() {
-  const [selOrd,   setSelOrd]   = useState(null);
-  const [msgs,     setMsgs]     = useState([]);
-  const [txt,      setTxt]      = useState("");
-  const [ordData,  setOrdData]  = useState(null);
-  const [myOrders, setMyOrders] = useState(lsGet);
-  const [confirming, setConfirming] = useState(false);
-  const chatRef = useRef(null);
-
-  useEffect(() => { setMyOrders(lsGet()); }, []);
-
-  // Listener untuk semua order (update localStorage)
-  useEffect(() => {
-    if (myOrders.length === 0) return;
-    const unsubs = myOrders.map(order => {
-      return onSnapshot(doc(db, "orders", order.orderId), snap => {
-        if (snap.exists()) {
-          const data = snap.data();
-          const newStatus = data.status || "pending";
-          const newBC = data.buyerConfirmed || false;
-          const arr = lsGet().map(o =>
-            o.orderId === order.orderId ? { ...o, status: newStatus, buyerConfirmed: newBC } : o
-          );
-          lsSet(arr);
-          setMyOrders([...arr]);
-          if (selOrd === order.orderId) {
-            setOrdData(prev => ({ ...prev, ...data, status: newStatus, buyerConfirmed: newBC }));
-          }
-        } else {
-          const arr = lsGet().filter(o => o.orderId !== order.orderId);
-          lsSet(arr);
-          setMyOrders([...arr]);
-          if (selOrd === order.orderId) setSelOrd(null);
-        }
-      });
-    });
-    return () => unsubs.forEach(u => u());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [myOrders.map(o => o.orderId).join(","), selOrd]);
-
-  // Listener chat + order detail
-  useEffect(() => {
-    if (!selOrd) return;
-    const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
-    const u1 = onSnapshot(q, snap => {
-      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
-    });
-    const u2 = onSnapshot(doc(db, "orders", selOrd), snap => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setOrdData({ id: snap.id, ...data });
-        // Update localStorage juga
-        const arr = lsGet().map(o =>
-          o.orderId === selOrd ? { ...o, status: data.status, buyerConfirmed: data.buyerConfirmed || false } : o
-        );
-        lsSet(arr);
-        setMyOrders([...arr]);
-      } else {
-        setSelOrd(null);
-      }
-    });
-    return () => { u1(); u2(); };
-  }, [selOrd]);
-
-  const sendChat = async () => {
-    if (!txt.trim() || !selOrd) return;
-    try {
-      await addDoc(collection(db, `orders/${selOrd}/chats`), {
-        from: "buyer", text: txt.trim(), createdAt: serverTimestamp(),
-      });
-      setTxt("");
-    } catch (e) { alert("Gagal: " + e.message); }
-  };
-
-  const handleBuyerConfirm = async () => {
-    if (!selOrd || confirming) return;
-    setConfirming(true);
-    try {
-      await updateDoc(doc(db, "orders", selOrd), {
-        status: "done",
-        buyerConfirmed: true,
-        buyerConfirmedAt: serverTimestamp(),
-      });
-      await addDoc(collection(db, `orders/${selOrd}/chats`), {
-        from: "system",
-        text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
-        createdAt: serverTimestamp(),
-      });
-      const arr = lsGet().map(o =>
-        o.orderId === selOrd ? { ...o, status: "done", buyerConfirmed: true } : o
-      );
-      lsSet(arr);
-      setMyOrders([...arr]);
-      setOrdData(prev => ({ ...prev, status: "done", buyerConfirmed: true }));
-      alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
-    } catch (e) { alert("Gagal konfirmasi: " + e.message); }
-    setConfirming(false);
-  };
-
-  const SL = { pending: "⏳ Menunggu konfirmasi", paid_pending_confirm: "💰 Pembayaran diverifikasi",
-    confirmed: "✅ Dikonfirmasi", shipped: "🚚 Dalam pengiriman", done: "🎉 Selesai", cancelled: "❌ Dibatalkan" };
-  const SC = { pending: "#c9a84c", paid_pending_confirm: "#7c6af5", confirmed: "#4caf82",
-    shipped: "#29b6f6", done: "#4caf82", cancelled: "#e05a5a" };
-  const WA_ADMIN = "6281328046768";
-
-  if (myOrders.length === 0) return (
-    <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
-      <div className="empty" style={{ padding: "40px 16px" }}>
-        <p style={{ fontSize: "2rem" }}>🛒</p><h3>Belum ada pesanan</h3>
-        <p>Pesanan akan muncul setelah checkout</p>
-      </div>
-    </div>
-  );
-
-  if (!selOrd) return (
-    <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
-      <div className="acp-list">
-        {myOrders.map(o => {
-          const status = o.status || "pending";
-          return (
-            <div key={o.orderId} className="acp-item" onClick={() => setSelOrd(o.orderId)}>
-              <img src={o.productImg || IMG_PH} alt={o.productName}
-                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
-                onError={e => { e.target.src = IMG_PH; }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p className="acp-pname">{o.productName}</p>
-                <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
-                <span style={{ fontSize: ".7rem", fontWeight: 600, color: SC[status] || "#888" }}>
-                  {SL[status] || status}
-                </span>
-              </div>
-              <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>Chat →</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  // Ambil status dan buyerConfirmed DARI FIRESTORE (ordData) – jangan pakai localStorage
-  const status = ordData?.status || "pending";
-  const buyerConfirmed = ordData?.buyerConfirmed || false; // <--- PERBAIKAN: hanya dari Firestore
-
-  // Debug log (bisa dihapus setelah testing)
-  console.log("[UserChatPanel] status:", status, "buyerConfirmed:", buyerConfirmed);
-
-  return (
-    <div className="chat-wrap">
-      <div className="chat-hdr">
-        <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
-        <Ic.Chat /> <span>{ordData?.productName || "Pesanan"}</span>
-      </div>
-      <div className="status-bar" style={{
-        background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status]
-      }}>
-        {SL[status] || status}
-      </div>
-
-      {/* ─── TOMBOL KONFIRMASI TERIMA ─── */}
-      {status === "shipped" && !buyerConfirmed && (
-        <div className="buyer-confirm-box">
-          <button
-            className="btn-buyer-confirm"
-            onClick={handleBuyerConfirm}
-            disabled={confirming}>
-            {confirming ? "⏳ Mengonfirmasi…" : "✅ Saya Sudah Menerima Pesanan"}
-          </button>
-        </div>
-      )}
-
-      {/* ─── UCAPAN TERIMA KASIH ─── */}
-      {status === "done" && buyerConfirmed && (
-        <div className="buyer-thankyou-box">
-          <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
-          <p className="buyer-thankyou-sub">
-            Pesanan kamu sudah kami tandai selesai.<br />
-            Semoga puas dengan produk Parevie 💛
-          </p>
-          <a
-            href={`https://wa.me/${WA_ADMIN}?text=Halo+Parevie%2C+saya+butuh+bantuan+mengenai+pesanan+saya`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-wa-help">
-            <Ic.WA /> Butuh Bantuan? Hubungi Kami
-          </a>
-        </div>
-      )}
-
-      <div className="chat-msgs" ref={chatRef}>
-        {msgs.map(m => (
-          <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
-            {m.from === "system"
-              ? <div className="csys">{m.text}</div>
-              : <><div className={`cbubble ${m.from === "buyer" ? "bubble-buyer" : "bubble-admin"}`}>{m.text}</div>
-                <span className="ctime">{m.from === "buyer" ? "Saya" : "👤 Admin"}</span></>}
-          </div>
-        ))}
-      </div>
-      <div className="chat-inp-row">
-        <input className="finput" style={{ flex: 1 }} placeholder="Ketik pesan ke admin…"
-          value={txt} onChange={e => setTxt(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && sendChat()} />
-        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send /></button>
-      </div>
-    </div>
-  );
-
   const status      = ordData?.status||"pending";
   const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
   const buyerConfirmed = ordData?.buyerConfirmed || lsOrder?.buyerConfirmed || false;
@@ -721,7 +499,6 @@ function UserChatPanel() {
         {SL[status]||status}
       </div>
 
-      {/* ─── TOMBOL KONFIRMASI TERIMA ─── */}
       {status === "shipped" && !buyerConfirmed && (
         <div className="buyer-confirm-box">
           <button
@@ -733,7 +510,6 @@ function UserChatPanel() {
         </div>
       )}
 
-      {/* ─── UCAPAN TERIMA KASIH ─── */}
       {status === "done" && buyerConfirmed && (
         <div className="buyer-thankyou-box">
           <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
@@ -822,12 +598,12 @@ function AdminChatPanel({onLogout}) {
   const [delConf, setDelConf] = useState(null);
   const chatRef = useRef(null);
 
-  useEffect(()=>{
+  useEffect(()=> {
     const q=query(collection(db,"orders"),orderBy("createdAt","desc"));
     return onSnapshot(q,snap=>setOrders(snap.docs.map(d=>({id:d.id,...d.data()}))));
   },[]);
 
-  useEffect(()=>{
+  useEffect(()=> {
     if (!selOrd) return;
     const q=query(collection(db,`orders/${selOrd.id}/chats`),orderBy("createdAt","asc"));
     return onSnapshot(q,snap=>{
@@ -836,7 +612,7 @@ function AdminChatPanel({onLogout}) {
     });
   },[selOrd]);
 
-  useEffect(()=>{
+  useEffect(()=> {
     if (!selOrd?.id) return;
     return onSnapshot(doc(db,"orders",selOrd.id), snap=>{
       if (snap.exists()) setSelOrd(prev=>({...prev,...snap.data(),id:snap.id}));
@@ -856,20 +632,6 @@ function AdminChatPanel({onLogout}) {
 
   const updStatus = async (s) => {
     if (!selOrd) return;
-    // Validasi status yang diizinkan
-    const current = selOrd.status;
-    const allowedMap = {
-      pending:        ['confirmed'],
-      paid_pending_confirm: ['confirmed'],
-      confirmed:      ['shipped'],
-      shipped:        ['done'],
-      done:           [],
-      cancelled:      []
-    };
-    if (!allowedMap[current]?.includes(s)) {
-      // Tidak diizinkan, abaikan
-      return;
-    }
     try {
       await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
       setSelOrd(o=>({...o,status:s}));
@@ -916,6 +678,9 @@ function AdminChatPanel({onLogout}) {
 
   const isStatusAllowed = (targetStatus) => {
     const current = selOrd?.status || "pending";
+    if (targetStatus === "cancelled") {
+      return ["pending", "paid_pending_confirm", "confirmed"].includes(current);
+    }
     if (current === "pending" || current === "paid_pending_confirm") {
       return targetStatus === "confirmed";
     }
@@ -969,12 +734,11 @@ function AdminChatPanel({onLogout}) {
             {selOrd.buyerConfirmed&&<p style={{color:"var(--green)",fontWeight:600}}>✅ Buyer sudah konfirmasi terima</p>}
           </div>
 
-          {/* ─── TOMBOL STATUS ─── */}
           <div className="acp-status-row">
             <button
               type="button"
               className={`btn-status${selOrd.status==="confirmed"?" on":""}`}
-              style={selOrd.status==="confirmed"?{background:SC.confirmed,borderColor:SC.confirmed}:{}}
+              style={selOrd.status==="confirmed"?{background:SC.confirmed,borderColor:SC.confirmed,color:"#000"}:{}}
               onClick={()=>updStatus("confirmed")}
               disabled={!isStatusAllowed("confirmed")}
             >
@@ -983,7 +747,7 @@ function AdminChatPanel({onLogout}) {
             <button
               type="button"
               className={`btn-status${selOrd.status==="shipped"?" on":""}`}
-              style={selOrd.status==="shipped"?{background:SC.shipped,borderColor:SC.shipped}:{}}
+              style={selOrd.status==="shipped"?{background:SC.shipped,borderColor:SC.shipped,color:"#000"}:{}}
               onClick={()=>updStatus("shipped")}
               disabled={!isStatusAllowed("shipped")}
             >
@@ -992,7 +756,7 @@ function AdminChatPanel({onLogout}) {
             <button
               type="button"
               className={`btn-status${selOrd.status==="done"?" on":""}`}
-              style={selOrd.status==="done"?{background:SC.done,borderColor:SC.done}:{}}
+              style={selOrd.status==="done"?{background:SC.done,borderColor:SC.done,color:"#000"}:{}}
               onClick={()=>updStatus("done")}
               disabled={!isStatusAllowed("done")}
             >
@@ -1001,9 +765,9 @@ function AdminChatPanel({onLogout}) {
             <button
               type="button"
               className={`btn-status${selOrd.status==="cancelled"?" on":""}`}
-              style={selOrd.status==="cancelled"?{background:SC.cancelled,borderColor:SC.cancelled}:{}}
+              style={selOrd.status==="cancelled"?{background:SC.cancelled,borderColor:SC.cancelled,color:"#fff"}:{}}
               onClick={()=>updStatus("cancelled")}
-              disabled={selOrd.status!=="pending" && selOrd.status!=="paid_pending_confirm"}
+              disabled={!isStatusAllowed("cancelled")}
             >
               Batal
             </button>
@@ -1016,7 +780,7 @@ function AdminChatPanel({onLogout}) {
                   ?<div className="csys">{m.text}</div>
                   :<div style={{display:"flex",flexDirection:"column",
                       alignItems:m.from==="admin"?"flex-end":"flex-start",gap:2}}>
-                    <div style={{display:"flex",alignItems:"flex-end",gap:4,
+                    <div style={{display:"flex",alignItems:"center",gap:4,
                         flexDirection:m.from==="admin"?"row-reverse":"row"}}>
                       <div className={`cbubble ${m.from==="admin"?"bubble-admin":"bubble-buyer"}`}>{m.text}</div>
                       <button type="button" className="msg-del-btn"
@@ -1193,14 +957,12 @@ export default function App() {
   const [notifCnt,     setNotifCnt]     = useState(0);
   const menuRef = useRef(null);
 
-  // Tutup menu saat klik luar
   useEffect(()=>{
     const h=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
 
-  // Firebase Auth listener
   useEffect(()=>{
     const adminEmail = import.meta.env.VITE_ADMIN_EMAIL||"awianton2@gmail.com";
     return onAuthStateChanged(auth,(user)=>{
@@ -1209,7 +971,6 @@ export default function App() {
     });
   },[]);
 
-  // Produk realtime
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
     return onSnapshot(q,
@@ -1218,7 +979,6 @@ export default function App() {
     );
   },[]);
 
-  // Notif badge admin
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"orders"),where("status","in",["pending","paid_pending_confirm"]));
@@ -1263,7 +1023,6 @@ export default function App() {
   const closeMenu=()=>setMenuOpen(false);
   const handleLogout=()=>{ signOut(auth); setIsAdmin(false); setShowACP(false); };
 
-  // Hitung pesanan aktif user dari localStorage
   const myActiveOrders = lsGet().filter(o=>o.status&&!["done","cancelled"].includes(o.status)).length;
 
   return (
@@ -1559,18 +1318,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .del-confirm-bar span{flex:1}
 .btn-yes-del{padding:4px 12px;border-radius:6px;border:none;background:var(--red);color:#fff;font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
 .btn-no-del{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
-/* Buyer confirm box */
 .buyer-confirm-box{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
 .btn-buyer-confirm{width:100%;padding:11px;border-radius:10px;border:none;background:#4caf82;color:#fff;font-weight:700;font-size:.88rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-buyer-confirm:hover:not(:disabled){background:#3d9e70}
 .btn-buyer-confirm:disabled{opacity:.6;cursor:not-allowed}
-/* Buyer thankyou box — permanen setelah konfirmasi */
 .buyer-thankyou-box{padding:14px 16px;background:#4caf8218;border-bottom:1px solid #4caf8233;flex-shrink:0;text-align:center}
 .buyer-thankyou-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--green);margin-bottom:4px;font-weight:700}
 .buyer-thankyou-sub{font-size:.8rem;color:var(--text2);line-height:1.6;margin-bottom:10px}
 .btn-wa-help{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#25d366;color:#fff;font-weight:600;font-size:.8rem;text-decoration:none;transition:all .2s}
 .btn-wa-help:hover{background:#1da851}
-/* Admin panel */
 .acp{padding:16px;min-height:380px}
 .acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:0;display:flex;align-items:center;gap:7px;color:var(--text)}
 .acp-list{display:flex;flex-direction:column;gap:8px}
@@ -1612,7 +1368,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .pform-checks{display:flex;gap:14px;margin-bottom:14px;flex-wrap:wrap}
 .chk{display:flex;align-items:center;gap:6px;font-size:.82rem;color:var(--text2);cursor:pointer}
 .form-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-.btn-cancel{padding:9px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.84rem;transition:all .2s}
+.btn-cancel{padding:9px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:'DM Sans',sans-serif;font-size Side:.84rem;transition:all .2s}
 .btn-cancel:hover{background:var(--bg3)}
 .btn-save{padding:9px 20px;border-radius:8px;border:none;background:var(--gold);color:#0d0d14;font-weight:700;font-size:.84rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-save:hover:not(:disabled){background:var(--gold2)}
