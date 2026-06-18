@@ -924,6 +924,14 @@ function AdminChatPanel({onLogout}) {
             <p>👤 {selOrd.buyerName} · 📱 {selOrd.buyerPhone}</p>
             <p>📍 {selOrd.address}</p>
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
+            {selOrd.courierLabel&&(
+              <p>🚚 Kurir: <strong>{selOrd.courierLabel}</strong>
+                {selOrd.courierType==="jne" && selOrd.shippingCost>0 && ` · Ongkir: ${fRp(selOrd.shippingCost)}`}
+              </p>
+            )}
+            {selOrd.shippingPending&&(
+              <p className="acp-ship-alert">⚠️ Ongkir belum dihitung — infokan ke buyer via chat</p>
+            )}
             {selOrd.buyerConfirmed&&<p style={{color:"var(--green)",fontWeight:600}}>✅ Buyer sudah konfirmasi terima</p>}
           </div>
           <div className="acp-status-row">
@@ -1566,6 +1574,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-del-order{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid #e05a5a44;background:transparent;color:var(--red);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif}
 .btn-del-order:hover{background:#e05a5a18}
 .acp-order-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
+.acp-ship-alert{color:var(--red);font-weight:600;background:#e05a5a14;padding:4px 8px;border-radius:6px;margin-top:4px}
 .acp-status-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px}
 .btn-status{padding:5px 10px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;text-transform:capitalize}
 .btn-status:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
