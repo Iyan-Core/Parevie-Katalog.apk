@@ -167,8 +167,19 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── Jenis pengiriman: jne (otomatis RajaOngkir) / gosend / grab (manual) ──
+  // ── Jenis pengiriman: jne (otomatis RajaOngkir) atau manual (gosend/grab/dll, admin atur tarif) ──
   const [courierType, setCourierType] = useState("jne");
+  const [manualRates, setManualRates] = useState({}); // {gosend: 12000, grab: 15000, ...}
+  const [loadingRates, setLoadingRates] = useState(true);
+
+  // Ambil tarif manual yang sudah diset admin (realtime)
+  useEffect(()=>{
+    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
+      setManualRates(snap.exists() ? (snap.data().rates||{}) : {});
+      setLoadingRates(false);
+    }, ()=>setLoadingRates(false));
+    return ()=>unsub();
+  },[]);
 
   // ── Shipping cost (RajaOngkir via Cloud Function proxy) ──
   const [destKeyword, setDestKeyword]   = useState("");
@@ -227,23 +238,30 @@ function OrderModal({p}) {
     setLoadingShip(false);
   };
 
-  // Ongkir: JNE dari RajaOngkir (otomatis), GoSend/Grab manual (admin isi nanti)
-  const shippingCost = courierType==="jne" ? (shipSelected?.cost||0) : 0;
+  // Ongkir: JNE dari RajaOngkir (otomatis), lainnya pakai tarif manual admin (jika sudah diset)
+  const manualCost = manualRates[courierType];
+  const hasManualRate = typeof manualCost === "number" && manualCost >= 0;
+  const shippingCost = courierType==="jne"
+    ? (shipSelected?.cost||0)
+    : (hasManualRate ? manualCost : 0);
   const totalWithShipping = p.price + shippingCost;
 
   const switchCourierType = (type) => {
     setCourierType(type);
-    // Reset pilihan ongkir JNE saat ganti ke kurir manual
-    if (type !== "jne") {
-      setShipSelected(null);
-    }
+    if (type !== "jne") setShipSelected(null);
   };
 
   const COURIER_LABEL = {
-    jne: "JNE / SiCepat / TIKI",
+    jne:    "JNE / SiCepat (Reguler)",
     gosend: "GoSend (Gojek)",
-    grab: "Grab Express",
+    grab:   "Grab Express",
+    maxim:  "Maxim",
+    indriver: "InDriver",
+    lalamove: "Lalamove",
+    kurir_toko: "Kurir Toko Sendiri",
   };
+  // Kurir manual = semua kecuali jne
+  const MANUAL_COURIERS = Object.keys(COURIER_LABEL).filter(k=>k!=="jne");
 
   const getLocation = () => {
     if (!navigator.geolocation) { setLocState("error"); setGpsText("GPS tidak tersedia."); return; }
@@ -287,7 +305,7 @@ function OrderModal({p}) {
         shippingCourier: shipSelected?.courier || "",
         shippingService: shipSelected?.service || "",
         shippingCost: shippingCost,
-        shippingPending: courierType!=="jne", // true jika ongkir belum dihitung (manual)
+        shippingPending: courierType!=="jne" && !hasManualRate, // true hanya jika tarif manual belum diset admin
         totalAmount: totalWithShipping,
         createdAt:serverTimestamp(),
       });
@@ -301,19 +319,19 @@ function OrderModal({p}) {
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
         message:`🛒 Pesanan baru: ${p.name}`,
-        detail:`Dari: ${name.trim()} (${phone.trim()})${courierType!=="jne"?` · 🚨 Perlu hitung ongkir ${COURIER_LABEL[courierType]}`:""}`,
+        detail:`Dari: ${name.trim()} (${phone.trim()})${(courierType!=="jne"&&!hasManualRate)?` · 🚨 Perlu set tarif ${COURIER_LABEL[courierType]}`:""}`,
         address:addr.trim(), read:false, createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]}${shippingCost>0?` (${fRp(shippingCost)})`:""}`,
         createdAt:serverTimestamp(),
       });
-      // Jika kurir manual (GoSend/Grab), kirim pengingat khusus ke admin
-      if (courierType !== "jne") {
+      // Jika kurir manual & tarif belum diset admin, kirim pengingat khusus
+      if (courierType !== "jne" && !hasManualRate) {
         await addDoc(collection(db,`orders/${oRef.id}/chats`),{
           from:"system",
-          text:`📍 Mohon admin hitung & infokan ongkos kirim ${COURIER_LABEL[courierType]} ke pembeli sebelum pembayaran.`,
+          text:`📍 Mohon admin set tarif ${COURIER_LABEL[courierType]} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
           createdAt:serverTimestamp(),
         });
       }
@@ -390,29 +408,19 @@ function OrderModal({p}) {
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
 
-        {/* ── Pilih Jenis Pengiriman ── */}
+        {/* ── Pilih Jenis Pengiriman — dropdown ── */}
         <div className="fg">
           <label>🚚 Pilih Jenis Pengiriman</label>
-          <div className="courier-radio-group">
-            <button type="button"
-              className={`courier-radio${courierType==="jne"?" on":""}`}
-              onClick={()=>switchCourierType("jne")}>
-              <span className="courier-icon">📦</span>
-              <span>JNE / SiCepat<br/><small>Ongkir otomatis</small></span>
-            </button>
-            <button type="button"
-              className={`courier-radio${courierType==="gosend"?" on":""}`}
-              onClick={()=>switchCourierType("gosend")}>
-              <span className="courier-icon">🛵</span>
-              <span>GoSend<br/><small>Diatur admin</small></span>
-            </button>
-            <button type="button"
-              className={`courier-radio${courierType==="grab"?" on":""}`}
-              onClick={()=>switchCourierType("grab")}>
-              <span className="courier-icon">🟢</span>
-              <span>Grab Express<br/><small>Diatur admin</small></span>
-            </button>
-          </div>
+          <select className="finput courier-select" value={courierType}
+            onChange={e=>switchCourierType(e.target.value)}>
+            <option value="jne">📦 JNE / SiCepat — Ongkir otomatis</option>
+            {MANUAL_COURIERS.map(k=>(
+              <option key={k} value={k}>
+                {k==="gosend"?"🛵":k==="grab"?"🟢":k==="maxim"?"🟡":k==="indriver"?"🔵":k==="lalamove"?"🚚":"🏪"} {COURIER_LABEL[k]}
+                {typeof manualRates[k]==="number" ? ` — ${fRp(manualRates[k])}` : " — Diatur admin"}
+              </option>
+            ))}
+          </select>
         </div>
 
         {/* ── Ongkos Kirim JNE (otomatis via RajaOngkir) ── */}
@@ -435,6 +443,11 @@ function OrderModal({p}) {
                 ))}
               </div>
             )}
+            {!FN_SEARCH_CITY && (
+              <p className="ship-msg err">
+                ⚠️ Fitur ongkir JNE belum aktif. Admin perlu deploy Cloud Function & isi URL di pengaturan.
+              </p>
+            )}
             {loadingShip && <p className="ship-msg">⏳ Menghitung ongkos kirim…</p>}
             {shipError && <p className="ship-msg err">{shipError}</p>}
             {shipOptions.length>0 && (
@@ -455,15 +468,22 @@ function OrderModal({p}) {
           </div>
         )}
 
-        {/* ── GoSend / Grab Express: manual, admin akan infokan ongkir via chat ── */}
-        {(courierType==="gosend"||courierType==="grab") && (
+        {/* ── Kurir manual: tampilkan tarif jika admin sudah set, atau info menunggu ── */}
+        {courierType!=="jne" && (
           <div className="fg">
-            <div className="ship-manual-note">
-              <p>
-                {courierType==="gosend"?"🛵":"🟢"} Kamu memilih <strong>{COURIER_LABEL[courierType]}</strong>.
-              </p>
-              <p>Ongkos kirim akan dihitung admin berdasarkan jarak toko ke alamatmu, dan diinfokan lewat chat setelah pesanan dibuat.</p>
-            </div>
+            {loadingRates ? (
+              <p className="ship-msg">⏳ Memuat tarif…</p>
+            ) : hasManualRate ? (
+              <div className="ship-manual-note ready">
+                <p>✅ Ongkir <strong>{COURIER_LABEL[courierType]}</strong> sudah ditentukan:</p>
+                <p className="ship-manual-price">{fRp(manualCost)}</p>
+              </div>
+            ) : (
+              <div className="ship-manual-note">
+                <p>Kamu memilih <strong>{COURIER_LABEL[courierType]}</strong>.</p>
+                <p>Ongkos kirim belum diset admin untuk ekspedisi ini. Admin akan menghitung & menginfokan ongkir lewat chat setelah pesanan dibuat.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -758,7 +778,90 @@ function UserChatPanel() {
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
-function AdminLogin({onLogin}) {
+// ─── ADMIN: Atur Tarif Pengiriman Manual (GoSend, Grab, dll) ──────────────
+function ShippingRatesAdmin({onClose}) {
+  const COURIERS = [
+    {key:"gosend",     label:"GoSend (Gojek)", icon:"🛵"},
+    {key:"grab",       label:"Grab Express",   icon:"🟢"},
+    {key:"maxim",      label:"Maxim",          icon:"🟡"},
+    {key:"indriver",   label:"InDriver",       icon:"🔵"},
+    {key:"lalamove",   label:"Lalamove",       icon:"🚚"},
+    {key:"kurir_toko", label:"Kurir Toko Sendiri", icon:"🏪"},
+  ];
+  const [rates,   setRates]   = useState({});
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+
+  useEffect(()=>{
+    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
+      setRates(snap.exists() ? (snap.data().rates||{}) : {});
+      setLoading(false);
+    }, ()=>setLoading(false));
+    return ()=>unsub();
+  },[]);
+
+  const updateRate = (key, value) => {
+    setRates(prev=>({...prev, [key]: value===""?undefined:Number(value)}));
+    setSaved(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      // Buang field undefined sebelum simpan
+      const clean = {};
+      Object.entries(rates).forEach(([k,v])=>{
+        if (typeof v==="number" && !isNaN(v)) clean[k]=v;
+      });
+      await updateDoc(doc(db,"settings","shippingRates"),{
+        rates: clean, updatedAt: serverTimestamp(),
+      }).catch(async ()=>{
+        // Jika dokumen belum ada, buat dengan addDoc-style set
+        const { setDoc } = await import("firebase/firestore");
+        await setDoc(doc(db,"settings","shippingRates"),{rates:clean, updatedAt:serverTimestamp()});
+      });
+      setSaved(true);
+      setTimeout(()=>setSaved(false),2500);
+    } catch(e){ alert("Gagal menyimpan tarif: "+e.message); }
+    setSaving(false);
+  };
+
+  return (
+    <div className="acp">
+      <h3 className="acp-ttl">🚚 Atur Tarif Pengiriman Manual</h3>
+      <p className="ship-admin-desc">
+        Tarif ini berlaku untuk semua pesanan dengan ekspedisi terkait. Buyer akan langsung melihat harga ini di form pemesanan. Kosongkan jika belum ditentukan.
+      </p>
+      {loading ? (
+        <p className="chat-empty">Memuat tarif…</p>
+      ) : (
+        <div className="ship-rates-list">
+          {COURIERS.map(c=>(
+            <div key={c.key} className="ship-rate-row">
+              <span className="ship-rate-label">{c.icon} {c.label}</span>
+              <div className="ship-rate-input-wrap">
+                <span>Rp</span>
+                <input type="number" className="finput ship-rate-input"
+                  placeholder="0"
+                  value={rates[c.key]??""}
+                  onChange={e=>updateRate(c.key, e.target.value)}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="form-acts" style={{marginTop:16}}>
+        <button type="button" className="btn-cancel" onClick={onClose}>Tutup</button>
+        <button type="button" className="btn-save" onClick={handleSave} disabled={saving}>
+          {saving?"Menyimpan…":saved?"✅ Tersimpan!":"Simpan Tarif"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -1141,6 +1244,7 @@ export default function App() {
   const [isAdmin,      setIsAdmin]      = useState(false);
   const [showLogin,    setShowLogin]    = useState(false);
   const [showACP,      setShowACP]      = useState(false);
+  const [showShipRates,setShowShipRates]= useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [dark,         setDark]         = useState(true);
@@ -1267,6 +1371,9 @@ export default function App() {
                         <button type="button" className="dd-item" onClick={()=>{setShowACP(true);closeMenu();}}>
                           <Ic.Chat/> Pesanan {notifCnt>0&&<span className="dd-badge">{notifCnt}</span>}
                         </button>
+                        <button type="button" className="dd-item" onClick={()=>{setShowShipRates(true);closeMenu();}}>
+                          🚚 Atur Tarif Kirim
+                        </button>
                         <div className="dd-info">
                           <span>📦 {products.length} produk</span>
                           <span>⚠ {products.filter(p=>getStock(p)<10).length} stok tipis</span>
@@ -1352,6 +1459,9 @@ export default function App() {
         </Modal>
         <Modal open={showMyOrders}   onClose={()=>setShowMyOrders(false)}>
           <UserChatPanel/>
+        </Modal>
+        <Modal open={showShipRates}  onClose={()=>setShowShipRates(false)}>
+          <ShippingRatesAdmin onClose={()=>setShowShipRates(false)}/>
         </Modal>
         <Modal open={showACP}        onClose={()=>setShowACP(false)}>
           <AdminChatPanel onLogout={handleLogout}/>
@@ -1481,18 +1591,21 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .loc-msg.ok{color:var(--green)}
 .loc-msg.err{color:var(--red)}
 .ord-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.8rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-/* Courier type radio selector */
-.courier-radio-group{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
-.courier-radio{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 6px;border:1px solid var(--border);border-radius:10px;background:var(--bg3);cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text2);transition:all .2s;text-align:center}
-.courier-radio:hover{border-color:var(--gold)}
-.courier-radio.on{border-color:var(--gold);background:#c9a84c14;color:var(--text)}
-.courier-icon{font-size:1.3rem}
-.courier-radio span:last-child{font-size:.72rem;line-height:1.3}
-.courier-radio small{color:var(--text3);font-size:.62rem}
-.courier-radio.on small{color:var(--gold)}
+/* Courier type dropdown selector */
+.courier-select{cursor:pointer}
 .ship-manual-note{padding:11px 13px;background:#7c6af514;border:1px solid #7c6af530;border-radius:10px;font-size:.8rem;color:var(--text2);line-height:1.7}
 .ship-manual-note strong{color:var(--accent)}
+.ship-manual-note.ready{background:#4caf8214;border-color:#4caf8230}
+.ship-manual-price{font-size:1.1rem;font-weight:700;color:var(--green);margin-top:4px}
 .ord-total-note{font-size:.7rem;color:var(--text3);margin-top:2px;font-style:italic}
+/* Admin: Atur Tarif Pengiriman */
+.ship-admin-desc{font-size:.8rem;color:var(--text3);line-height:1.6;margin-bottom:14px}
+.ship-rates-list{display:flex;flex-direction:column;gap:10px}
+.ship-rate-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)}
+.ship-rate-label{font-size:.85rem;color:var(--text);font-weight:500;flex:1}
+.ship-rate-input-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.ship-rate-input-wrap span{font-size:.8rem;color:var(--text3)}
+.ship-rate-input{width:100px;text-align:right;padding:7px 9px}
 /* Shipping cost UI */
 .ship-section{position:relative}
 .ship-city-search{position:relative;display:flex;align-items:center}
