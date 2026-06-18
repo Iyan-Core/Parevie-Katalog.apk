@@ -25,10 +25,8 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: 📦 Install dependencies
-        run: |
-          npm install --package-lock-only --no-fund --no-audit
-          npm ci
+      - name: 📦 Install dependencies (tanpa lock file)
+        run: npm install --no-fund --no-audit
 
       - name: 🏗️ Build React app
         run: npm run build
@@ -42,7 +40,7 @@ jobs:
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
           RAJAONGKIR_API_KEY: ${{ secrets.RAJAONGKIR_API_KEY }}
 
-      - name: 📱 Install Capacitor (opsional, jika belum di package.json)
+      - name: 📱 Install Capacitor
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
