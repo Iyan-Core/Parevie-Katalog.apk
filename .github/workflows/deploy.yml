@@ -23,7 +23,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # cache: npm   ← DIHAPUS karena tidak ada lock file
+          # cache dihapus karena tidak ada lock file
 
       - name: 📦 Install dependencies
         run: npm install --no-fund --no-audit
@@ -40,7 +40,19 @@ jobs:
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
           RAJAONGKIR_API_KEY: ${{ secrets.RAJAONGKIR_API_KEY }}
 
-      - name: 📱 Install Capacitor (jika belum ada di package.json)
+      - name: 📝 Fix capacitor.config.json for CI
+        run: |
+          echo '{
+            "appId": "com.katalogpro.app",
+            "appName": "KatalogPro",
+            "webDir": "dist",
+            "server": {
+              "cleartext": true,
+              "androidScheme": "https"
+            }
+          }' > capacitor.config.json
+
+      - name: 📱 Install Capacitor
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
