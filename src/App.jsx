@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+import { Geolocation } from '@capacitor/geolocation';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -56,6 +57,16 @@ const normGender = (g="") => {
 
 const getStock = (p) => Number(p?.stock ?? p?.size ?? 0);
 
+// ─── Haversine (jarak km) ────────────────────────────────────────────────
+const haversine = (lat1, lon1, lat2, lon2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
 // ─── LocalStorage helpers ─────────────────────────────────────────────────
 const LS_KEY = "parevie_my_orders";
 const lsGet  = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)||"[]"); } catch { return []; } };
@@ -85,7 +96,7 @@ const Ic = {
   Admin:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
   Upload: ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>,
   Tag:    ()=><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-  Sun:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  Sun:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="3" y1="12" x2="5" y2="12"/></svg>,
   Moon:   ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
   Send:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
   Loc:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
@@ -167,35 +178,94 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── Jenis pengiriman: jne (otomatis RajaOngkir) atau manual (gosend/grab/dll, admin atur tarif) ──
+  // ── Jenis pengiriman ──
   const [courierType, setCourierType] = useState("jne");
-  const [manualRates, setManualRates] = useState({}); // {gosend: 12000, grab: 15000, ...}
+  const [manualRates, setManualRates] = useState({});
   const [loadingRates, setLoadingRates] = useState(true);
 
-  // Ambil tarif manual yang sudah diset admin (realtime)
-  useEffect(()=>{
-    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
-      setManualRates(snap.exists() ? (snap.data().rates||{}) : {});
-      setLoadingRates(false);
-    }, ()=>setLoadingRates(false));
-    return ()=>unsub();
-  },[]);
+  // ── Tarif per km & koordinat admin ──
+  const [ratePerKm, setRatePerKm] = useState(0);
+  const [adminCoords, setAdminCoords] = useState(null);
+  const [buyerCoords, setBuyerCoords] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [shippingCostFromDist, setShippingCostFromDist] = useState(0);
 
-  // ── Shipping cost (RajaOngkir via Cloud Function proxy) ──
+  // ── RajaOngkir ──
   const [destKeyword, setDestKeyword]   = useState("");
   const [destOptions, setDestOptions]   = useState([]);
-  const [destCity,    setDestCity]      = useState(null); // {city_id, city_name}
+  const [destCity,    setDestCity]      = useState(null);
   const [searchingCity, setSearchingCity] = useState(false);
   const [shipOptions, setShipOptions]   = useState([]);
   const [shipSelected,setShipSelected]  = useState(null);
   const [loadingShip, setLoadingShip]   = useState(false);
   const [shipError,   setShipError]     = useState("");
 
-  // Ganti dengan URL Cloud Function kamu setelah deploy
   const FN_SEARCH_CITY = import.meta.env.VITE_FN_SEARCH_CITY_URL || "";
   const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
-  const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || ""; // kota asal toko
+  const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || "";
 
+  // ── Ambil data tarif & lokasi admin dari Firestore ──
+  useEffect(()=>{
+    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
+      const data = snap.data();
+      if(data){
+        setManualRates(data.rates||{});
+        setRatePerKm(data.ratePerKm||0);
+        setAdminCoords(data.adminLocation||null);
+      } else {
+        setManualRates({});
+        setRatePerKm(0);
+        setAdminCoords(null);
+      }
+      setLoadingRates(false);
+    }, ()=>setLoadingRates(false));
+    return ()=>unsub();
+  },[]);
+
+  // ── Hitung ulang ongkir setiap kali buyerCoords, adminCoords, ratePerKm berubah ──
+  useEffect(()=>{
+    if(buyerCoords && adminCoords && ratePerKm>0){
+      const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
+      setDistance(dist);
+      setShippingCostFromDist(dist * ratePerKm);
+    } else {
+      setDistance(null);
+      setShippingCostFromDist(0);
+    }
+  },[buyerCoords, adminCoords, ratePerKm]);
+
+  // ── Fungsi GPS dengan Capacitor ──
+  const getLocation = async () => {
+    setLocState("loading");
+    setGpsText("Mengambil lokasi GPS…");
+    try {
+      const coords = await Geolocation.getCurrentPosition({
+        enableHighAccuracy: true,
+        timeout: 15000,
+      });
+      const la = coords.coords.latitude.toFixed(6);
+      const lo = coords.coords.longitude.toFixed(6);
+      const url = `https://maps.google.com/?q=${la},${lo}`;
+      setGpsText(`📍 ${la}, ${lo}`);
+      setLocState("done");
+      setBuyerCoords({
+        lat: coords.coords.latitude,
+        lng: coords.coords.longitude
+      });
+      setAddr(prev =>
+        prev.includes("GPS:") ? prev : (prev.trim() ? prev + "\n" : "") + `GPS: ${url}`
+      );
+    } catch (err) {
+      setLocState("error");
+      let m = "Izin lokasi ditolak. Aktifkan GPS & izinkan di pengaturan.";
+      if (err.message && err.message.toLowerCase().includes("denied")) {
+        m = "Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan";
+      }
+      setGpsText(m);
+    }
+  };
+
+  // ── Cari kota untuk JNE ──
   const searchCity = async (kw) => {
     setDestKeyword(kw);
     setDestCity(null);
@@ -227,7 +297,7 @@ function OrderModal({p}) {
         body: JSON.stringify({
           origin: ORIGIN_CITY_ID,
           destination: city.city_id,
-          weight: 200, // gram — sesuaikan dengan berat produk
+          weight: 200,
           courier: "jne",
         }),
       });
@@ -238,79 +308,51 @@ function OrderModal({p}) {
     setLoadingShip(false);
   };
 
-  // Ongkir: JNE dari RajaOngkir (otomatis), lainnya pakai tarif manual admin (jika sudah diset)
-  const manualCost = manualRates[courierType];
-  const hasManualRate = typeof manualCost === "number" && manualCost >= 0;
-  const shippingCost = courierType==="jne"
-    ? (shipSelected?.cost||0)
-    : (hasManualRate ? manualCost : 0);
-  const totalWithShipping = p.price + shippingCost;
-
-  const switchCourierType = (type) => {
-    setCourierType(type);
-    if (type !== "jne") setShipSelected(null);
-  };
-
-  const COURIER_LABEL = {
-    jne:    "JNE / SiCepat (Reguler)",
-    gosend: "GoSend (Gojek)",
-    grab:   "Grab Express",
-    maxim:  "Maxim",
-    indriver: "InDriver",
-    lalamove: "Lalamove",
-    kurir_toko: "Kurir Toko Sendiri",
-  };
-  // Kurir manual = semua kecuali jne
-  const MANUAL_COURIERS = Object.keys(COURIER_LABEL).filter(k=>k!=="jne");
-
-  const getLocation = () => {
-    if (!navigator.geolocation) { setLocState("error"); setGpsText("GPS tidak tersedia."); return; }
-    setLocState("loading"); setGpsText("Mengambil lokasi GPS…");
-    const tid = setTimeout(()=>{
-      setLocState("error");
-      setGpsText("Timeout. Aktifkan GPS & izin lokasi di Pengaturan → Aplikasi → Izin → Lokasi.");
-    },15000);
-    navigator.geolocation.getCurrentPosition(
-      (pos)=>{
-        clearTimeout(tid);
-        const la=pos.coords.latitude.toFixed(6), lo=pos.coords.longitude.toFixed(6);
-        const url=`https://maps.google.com/?q=${la},${lo}`;
-        setGpsText(`📍 ${la}, ${lo}`); setLocState("done");
-        setAddr(prev=>prev.includes("GPS:")?prev:(prev.trim()?prev+"\n":"")+`GPS: ${url}`);
-      },
-      (err)=>{
-        clearTimeout(tid); setLocState("error");
-        const m=err.code===1?"Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan"
-          :err.code===2?"GPS tidak ditemukan. Pastikan GPS aktif."
-          :"Timeout. Coba di area terbuka.";
-        setGpsText(m);
-      },
-      {enableHighAccuracy:true,timeout:12000,maximumAge:0}
-    );
-  };
-
+  // ── Submit order ──
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
     if (!addr.trim()) return alert("Alamat pengiriman wajib diisi!");
     setSub(true);
     try {
+      // Tentukan ongkir akhir: jika JNE pakai shipSelected, jika manual & ada ratePerKm pakai jarak
+      let finalShippingCost = 0;
+      if (courierType === "jne") {
+        finalShippingCost = shipSelected?.cost || 0;
+      } else {
+        // Kurir manual: prioritas tarif flat manual, lalu ratePerKm jika ada jarak
+        const flat = manualRates[courierType];
+        if (typeof flat === "number" && flat >= 0) {
+          finalShippingCost = flat;
+        } else if (distance && ratePerKm > 0) {
+          finalShippingCost = distance * ratePerKm;
+        } else {
+          finalShippingCost = 0; // akan jadi "belum diatur"
+        }
+      }
+      const total = p.price + finalShippingCost;
+
       const oRef = await addDoc(collection(db,"orders"),{
         productId:p.id, productName:p.name, productImg:getImg(p),
         price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
         address:addr.trim(), note:note.trim(), status:"pending",
         courierType: courierType,
-        courierLabel: COURIER_LABEL[courierType],
+        courierLabel: COURIER_LABEL[courierType] || courierType,
         shippingCity: destCity?.city_name || "",
         shippingCourier: shipSelected?.courier || "",
         shippingService: shipSelected?.service || "",
-        shippingCost: shippingCost,
-        shippingPending: courierType!=="jne" && !hasManualRate, // true hanya jika tarif manual belum diset admin
-        totalAmount: totalWithShipping,
+        shippingCost: finalShippingCost,
+        shippingPending: (courierType!=="jne" && finalShippingCost===0 && !manualRates[courierType]),
+        totalAmount: total,
+        // simpan data jarak jika ada
+        distance: distance || null,
+        ratePerKm: ratePerKm || 0,
+        adminCoords: adminCoords || null,
+        buyerCoords: buyerCoords || null,
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
-      // Simpan ke localStorage
+      // localStorage
       const existing = lsGet();
       if (!existing.find(o=>o.orderId===oRef.id)) {
         lsSet([{orderId:oRef.id, productName:p.name, productImg:getImg(p),
@@ -319,19 +361,18 @@ function OrderModal({p}) {
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
         message:`🛒 Pesanan baru: ${p.name}`,
-        detail:`Dari: ${name.trim()} (${phone.trim()})${(courierType!=="jne"&&!hasManualRate)?` · 🚨 Perlu set tarif ${COURIER_LABEL[courierType]}`:""}`,
+        detail:`Dari: ${name.trim()} (${phone.trim()})${finalShippingCost===0 && courierType!=="jne" ? ` · 🚨 Perlu set tarif ${COURIER_LABEL[courierType]}`:""}`,
         address:addr.trim(), read:false, createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]}${shippingCost>0?` (${fRp(shippingCost)})`:""}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]||courierType}${finalShippingCost>0?` (${fRp(finalShippingCost)})`:""}${distance?` · Jarak ${distance.toFixed(1)} km`:""}`,
         createdAt:serverTimestamp(),
       });
-      // Jika kurir manual & tarif belum diset admin, kirim pengingat khusus
-      if (courierType !== "jne" && !hasManualRate) {
+      if (courierType !== "jne" && finalShippingCost===0 && !manualRates[courierType]) {
         await addDoc(collection(db,`orders/${oRef.id}/chats`),{
           from:"system",
-          text:`📍 Mohon admin set tarif ${COURIER_LABEL[courierType]} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
+          text:`📍 Mohon admin set tarif ${COURIER_LABEL[courierType]||courierType} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
           createdAt:serverTimestamp(),
         });
       }
@@ -355,7 +396,6 @@ function OrderModal({p}) {
         message:`💰 Pembayaran: ${p.name} — ${fRp(p.price)}`,
         read:false, createdAt:serverTimestamp(),
       });
-      // Update status di localStorage juga
       const arr = lsGet().map(o=>o.orderId===orderId?{...o,status:"paid_pending_confirm"}:o);
       lsSet(arr);
       setStep("chat");
@@ -381,6 +421,30 @@ function OrderModal({p}) {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
+  const COURIER_LABEL = {
+    jne:    "JNE / SiCepat (Reguler)",
+    gosend: "GoSend (Gojek)",
+    grab:   "Grab Express",
+    maxim:  "Maxim",
+    indriver: "InDriver",
+    lalamove: "Lalamove",
+    kurir_toko: "Kurir Toko Sendiri",
+  };
+  const MANUAL_COURIERS = Object.keys(COURIER_LABEL).filter(k=>k!=="jne");
+
+  const flatManualCost = manualRates[courierType];
+  const hasFlatManual = typeof flatManualCost === "number" && flatManualCost >= 0;
+  // Ongkir akhir untuk preview
+  let previewShipping = 0;
+  if (courierType === "jne") {
+    previewShipping = shipSelected?.cost || 0;
+  } else {
+    if (hasFlatManual) previewShipping = flatManualCost;
+    else if (distance && ratePerKm > 0) previewShipping = distance * ratePerKm;
+    else previewShipping = 0;
+  }
+  const totalWithShipping = p.price + previewShipping;
+
   if (step==="form") return (
     <div className="ord-wrap">
       <div className="ord-hdr">
@@ -404,26 +468,31 @@ function OrderModal({p}) {
             {locState==="loading"?" Mengambil GPS…":locState==="done"?" Lokasi Tersimpan ✓":locState==="error"?" Coba Lagi":" Tambah Lokasi GPS"}
           </button>
           {gpsText&&<p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>{gpsText}</p>}
+          {distance!==null && (
+            <p style={{fontSize:".75rem",color:"var(--gold)",marginTop:4}}>
+              📏 Jarak ke toko: <strong>{distance.toFixed(1)} km</strong>
+            </p>
+          )}
         </div>
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
 
-        {/* ── Pilih Jenis Pengiriman — dropdown ── */}
+        {/* ── Pilih Jenis Pengiriman ── */}
         <div className="fg">
           <label>🚚 Pilih Jenis Pengiriman</label>
           <select className="finput courier-select" value={courierType}
-            onChange={e=>switchCourierType(e.target.value)}>
+            onChange={e=>setCourierType(e.target.value)}>
             <option value="jne">📦 JNE / SiCepat — Ongkir otomatis</option>
             {MANUAL_COURIERS.map(k=>(
               <option key={k} value={k}>
                 {k==="gosend"?"🛵":k==="grab"?"🟢":k==="maxim"?"🟡":k==="indriver"?"🔵":k==="lalamove"?"🚚":"🏪"} {COURIER_LABEL[k]}
-                {typeof manualRates[k]==="number" ? ` — ${fRp(manualRates[k])}` : " — Diatur admin"}
+                {typeof manualRates[k]==="number" ? ` — ${fRp(manualRates[k])}` : distance && ratePerKm>0 ? ` — ${fRp(distance*ratePerKm)} (per km)` : " — Diatur admin"}
               </option>
             ))}
           </select>
         </div>
 
-        {/* ── Ongkos Kirim JNE (otomatis via RajaOngkir) ── */}
+        {/* ── JNE ── */}
         {courierType==="jne" && (
           <div className="fg ship-section">
             <label>Hitung Ongkos Kirim JNE</label>
@@ -468,25 +537,29 @@ function OrderModal({p}) {
           </div>
         )}
 
-        {/* ── Kurir manual: tampilkan tarif jika admin sudah set, atau info menunggu ── */}
+        {/* ── Kurir manual ── */}
         {courierType!=="jne" && (
           <div className="fg">
             {loadingRates ? (
               <p className="ship-msg">⏳ Memuat tarif…</p>
-            ) : hasManualRate ? (
+            ) : hasFlatManual ? (
               <div className="ship-manual-note ready">
                 <p>✅ Ongkir <strong>{COURIER_LABEL[courierType]}</strong> sudah ditentukan:</p>
-                <p className="ship-manual-price">{fRp(manualCost)}</p>
+                <p className="ship-manual-price">{fRp(flatManualCost)}</p>
+              </div>
+            ) : distance && ratePerKm>0 ? (
+              <div className="ship-manual-note ready">
+                <p>📏 Jarak <strong>{distance.toFixed(1)} km</strong> × Rp{ratePerKm}/km</p>
+                <p className="ship-manual-price">{fRp(distance * ratePerKm)}</p>
               </div>
             ) : (
               <div className="ship-manual-note">
                 <p>Kamu memilih <strong>{COURIER_LABEL[courierType]}</strong>.</p>
-                <p>Ongkos kirim belum diset admin untuk ekspedisi ini. Admin akan menghitung & menginfokan ongkir lewat chat setelah pesanan dibuat.</p>
+                <p>Ongkos kirim belum ditentukan. {!adminCoords || ratePerKm===0 ? "Admin belum mengatur tarif per km & lokasi toko." : "Aktifkan GPS untuk hitung jarak."}</p>
               </div>
             )}
           </div>
         )}
-
 
         <div className="ord-info">
           <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
@@ -496,20 +569,25 @@ function OrderModal({p}) {
         {/* ── Ringkasan Total ── */}
         <div className="ord-total-box">
           <div className="ord-total-row"><span>Harga produk</span><span>{fRp(p.price)}</span></div>
+          {distance!==null && courierType!=="jne" && (
+            <div className="ord-total-row"><span>Jarak (km)</span><span>{distance.toFixed(1)}</span></div>
+          )}
           <div className="ord-total-row">
             <span>Ongkos kirim</span>
             <span>
               {courierType==="jne"
-                ? (shippingCost>0?fRp(shippingCost):"—")
-                : "Diinfokan admin"}
+                ? (previewShipping>0?fRp(previewShipping):"—")
+                : hasFlatManual ? fRp(flatManualCost)
+                : distance && ratePerKm>0 ? fRp(distance*ratePerKm)
+                : "—"}
             </span>
           </div>
           <div className="ord-total-row total">
-            <span>Total{courierType!=="jne"&&"*"}</span>
+            <span>Total{courierType!=="jne"&&(previewShipping===0)&&"*"}</span>
             <span>{fRp(totalWithShipping)}</span>
           </div>
-          {courierType!=="jne" && (
-            <p className="ord-total-note">*Belum termasuk ongkir {COURIER_LABEL[courierType]}</p>
+          {courierType!=="jne" && previewShipping===0 && (
+            <p className="ord-total-note">*Ongkir akan dikonfirmasi admin</p>
           )}
         </div>
 
@@ -582,16 +660,13 @@ function UserChatPanel() {
   const [confirming, setConfirming] = useState(false);
   const chatRef = useRef(null);
 
-  // Sync localStorage → state setiap buka panel
   useEffect(()=>{ setMyOrders(lsGet()); },[]);
 
-  // Listen status semua pesanan di LIST (bukan yang sedang dibuka detailnya)
-  // agar tidak race dengan listener detail di bawah
   useEffect(()=>{
     const orders = lsGet();
     if (orders.length===0) return;
     const unsubs = orders
-      .filter(order=>order.orderId!==selOrd) // skip yang sedang dibuka — dihandle listener detail
+      .filter(order=>order.orderId!==selOrd)
       .map(order=>{
         return onSnapshot(doc(db,"orders",order.orderId), snap=>{
           if (snap.exists()) {
@@ -611,7 +686,6 @@ function UserChatPanel() {
     return ()=>unsubs.forEach(u=>u());
   },[selOrd]);
 
-  // Listen chat + order saat detail dibuka — SATU-SATUNYA sumber kebenaran untuk order yang aktif
   useEffect(()=>{
     if (!selOrd) return;
     const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
@@ -623,7 +697,6 @@ function UserChatPanel() {
       if (snap.exists()) {
         const data = snap.data();
         setOrdData(data);
-        // Sync ke localStorage juga supaya list pesanan ikut update
         const arr = lsGet().map(o=>
           o.orderId===selOrd ? {...o, status:data.status, buyerConfirmed:data.buyerConfirmed||false} : o
         );
@@ -646,10 +719,6 @@ function UserChatPanel() {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  // ── Konfirmasi terima pesanan ──
-  // Firestore adalah satu-satunya sumber kebenaran.
-  // Listener detail (u2 di atas) akan otomatis update ordData + localStorage
-  // begitu write ini berhasil — tidak perlu set manual di sini (hindari race).
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
@@ -672,7 +741,7 @@ function UserChatPanel() {
   const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
     shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
 
-  const WA_ADMIN = "6281328046768"; // ganti nomor WA admin
+  const WA_ADMIN = "6281328046768";
 
   if (myOrders.length===0) return (
     <div className="acp">
@@ -711,7 +780,6 @@ function UserChatPanel() {
   );
 
   const status      = ordData?.status||"pending";
-  // Cek buyerConfirmed dari ordData (Firestore) ATAU localStorage
   const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
   const buyerConfirmed = ordData?.buyerConfirmed || lsOrder?.buyerConfirmed || false;
   const found       = lsOrder;
@@ -727,7 +795,6 @@ function UserChatPanel() {
         {SL[status]||status}
       </div>
 
-      {/* ── Tombol konfirmasi terima pesanan ── */}
       {status==="done" && !buyerConfirmed && (
         <div className="buyer-confirm-box">
           <button
@@ -739,7 +806,6 @@ function UserChatPanel() {
         </div>
       )}
 
-      {/* ── Tampilan setelah konfirmasi — PERMANEN ── */}
       {status==="done" && buyerConfirmed && (
         <div className="buyer-thankyou-box">
           <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
@@ -777,8 +843,7 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
-// ─── ADMIN: Atur Tarif Pengiriman Manual (GoSend, Grab, dll) ──────────────
+// ─── ADMIN: Atur Tarif Pengiriman Manual + per km ──────────────────────
 function ShippingRatesAdmin({onClose}) {
   const COURIERS = [
     {key:"gosend",     label:"GoSend (Gojek)", icon:"🛵"},
@@ -788,14 +853,25 @@ function ShippingRatesAdmin({onClose}) {
     {key:"lalamove",   label:"Lalamove",       icon:"🚚"},
     {key:"kurir_toko", label:"Kurir Toko Sendiri", icon:"🏪"},
   ];
-  const [rates,   setRates]   = useState({});
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [saved,   setSaved]   = useState(false);
+  const [rates,      setRates]      = useState({});
+  const [ratePerKm,  setRatePerKm]  = useState(0);
+  const [adminLat,   setAdminLat]   = useState("");
+  const [adminLng,   setAdminLng]   = useState("");
+  const [loading,    setLoading]    = useState(true);
+  const [saving,     setSaving]     = useState(false);
+  const [saved,      setSaved]      = useState(false);
 
   useEffect(()=>{
     const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
-      setRates(snap.exists() ? (snap.data().rates||{}) : {});
+      const data = snap.data();
+      if(data){
+        setRates(data.rates||{});
+        setRatePerKm(data.ratePerKm||0);
+        if(data.adminLocation){
+          setAdminLat(data.adminLocation.lat?.toString()||"");
+          setAdminLng(data.adminLocation.lng?.toString()||"");
+        }
+      }
       setLoading(false);
     }, ()=>setLoading(false));
     return ()=>unsub();
@@ -809,17 +885,29 @@ function ShippingRatesAdmin({onClose}) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Buang field undefined sebelum simpan
       const clean = {};
       Object.entries(rates).forEach(([k,v])=>{
         if (typeof v==="number" && !isNaN(v)) clean[k]=v;
       });
       await updateDoc(doc(db,"settings","shippingRates"),{
-        rates: clean, updatedAt: serverTimestamp(),
+        rates: clean,
+        ratePerKm: Number(ratePerKm) || 0,
+        adminLocation: {
+          lat: parseFloat(adminLat) || 0,
+          lng: parseFloat(adminLng) || 0
+        },
+        updatedAt: serverTimestamp(),
       }).catch(async ()=>{
-        // Jika dokumen belum ada, buat dengan addDoc-style set
         const { setDoc } = await import("firebase/firestore");
-        await setDoc(doc(db,"settings","shippingRates"),{rates:clean, updatedAt:serverTimestamp()});
+        await setDoc(doc(db,"settings","shippingRates"),{
+          rates: clean,
+          ratePerKm: Number(ratePerKm) || 0,
+          adminLocation: {
+            lat: parseFloat(adminLat) || 0,
+            lng: parseFloat(adminLng) || 0
+          },
+          updatedAt: serverTimestamp()
+        });
       });
       setSaved(true);
       setTimeout(()=>setSaved(false),2500);
@@ -829,27 +917,52 @@ function ShippingRatesAdmin({onClose}) {
 
   return (
     <div className="acp">
-      <h3 className="acp-ttl">🚚 Atur Tarif Pengiriman Manual</h3>
+      <h3 className="acp-ttl">🚚 Atur Tarif Pengiriman</h3>
       <p className="ship-admin-desc">
-        Tarif ini berlaku untuk semua pesanan dengan ekspedisi terkait. Buyer akan langsung melihat harga ini di form pemesanan. Kosongkan jika belum ditentukan.
+        Tarif flat untuk ekspedisi tertentu, atau gunakan tarif per km (otomatis hitung jarak dengan GPS buyer).
       </p>
       {loading ? (
         <p className="chat-empty">Memuat tarif…</p>
       ) : (
-        <div className="ship-rates-list">
-          {COURIERS.map(c=>(
-            <div key={c.key} className="ship-rate-row">
-              <span className="ship-rate-label">{c.icon} {c.label}</span>
-              <div className="ship-rate-input-wrap">
-                <span>Rp</span>
-                <input type="number" className="finput ship-rate-input"
-                  placeholder="0"
-                  value={rates[c.key]??""}
-                  onChange={e=>updateRate(c.key, e.target.value)}/>
-              </div>
+        <>
+          {/* ── Tarif per km ── */}
+          <div className="ship-rate-row" style={{marginBottom:12}}>
+            <span className="ship-rate-label">📏 Tarif per km (Rp)</span>
+            <div className="ship-rate-input-wrap">
+              <span>Rp</span>
+              <input type="number" className="finput ship-rate-input"
+                placeholder="2000" value={ratePerKm}
+                onChange={e=>{setRatePerKm(e.target.value); setSaved(false);}}/>
             </div>
-          ))}
-        </div>
+          </div>
+          <div className="ship-rate-row" style={{marginBottom:12}}>
+            <span className="ship-rate-label">📍 Koordinat Toko</span>
+            <div style={{display:"flex", gap:8, flex:1}}>
+              <input type="text" className="finput" placeholder="Latitude (contoh: -6.1234)"
+                value={adminLat} onChange={e=>{setAdminLat(e.target.value); setSaved(false);}}/>
+              <input type="text" className="finput" placeholder="Longitude (contoh: 106.4567)"
+                value={adminLng} onChange={e=>{setAdminLng(e.target.value); setSaved(false);}}/>
+            </div>
+          </div>
+          <p style={{fontSize:".7rem",color:"var(--text3)",marginBottom:12}}>
+            ⚠️ Koordinat toko digunakan untuk menghitung jarak ke buyer. Dapatkan dari Google Maps (klik kanan → koordinat).
+          </p>
+
+          {/* ── Tarif flat ── */}
+          <div className="ship-rates-list">
+            {COURIERS.map(c=>(
+              <div key={c.key} className="ship-rate-row">
+                <span className="ship-rate-label">{c.icon} {c.label}</span>
+                <div className="ship-rate-input-wrap">
+                  <span>Rp</span>
+                  <input type="number" className="finput ship-rate-input"
+                    placeholder="0" value={rates[c.key]??""}
+                    onChange={e=>updateRate(c.key, e.target.value)}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
       <div className="form-acts" style={{marginTop:16}}>
         <button type="button" className="btn-cancel" onClick={onClose}>Tutup</button>
@@ -862,7 +975,7 @@ function ShippingRatesAdmin({onClose}) {
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
-function AdminLogin({onLogin}) {
+function AdminLogin({ onLogin }) {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -1031,6 +1144,7 @@ function AdminChatPanel({onLogout}) {
             {selOrd.courierLabel&&(
               <p>🚚 Kurir: <strong>{selOrd.courierLabel}</strong>
                 {selOrd.courierType==="jne" && selOrd.shippingCost>0 && ` · Ongkir: ${fRp(selOrd.shippingCost)}`}
+                {selOrd.distance && ` · Jarak ${selOrd.distance.toFixed(1)} km`}
               </p>
             )}
             {selOrd.shippingPending&&(
@@ -1041,22 +1155,19 @@ function AdminChatPanel({onLogout}) {
           <div className="acp-status-row">
             {Object.entries(SL).map(([k,v])=>{
               const cur = selOrd.status || "pending";
-              // ── State machine: hanya 1 langkah maju + Batal yang aktif ──
               let disabled = true;
               if (k === cur) {
-                // Tombol status saat ini selalu tampil aktif (sebagai indikator)
                 disabled = false;
               } else if (k === "cancelled") {
-                // Batal selalu jadi escape hatch, KECUALI saat sudah selesai/dibatalkan
                 disabled = (cur === "done" || cur === "cancelled");
               } else if (cur === "pending" && k === "paid_pending_confirm") {
-                disabled = false; // Pending → Sudah Bayar (biasanya otomatis dari buyer)
+                disabled = false;
               } else if (cur === "paid_pending_confirm" && k === "confirmed") {
-                disabled = false; // Sudah Bayar → Konfirmasi
+                disabled = false;
               } else if (cur === "confirmed" && k === "shipped") {
-                disabled = false; // Konfirmasi → Kirim
+                disabled = false;
               } else if (cur === "shipped" && k === "done") {
-                disabled = false; // Kirim → Selesai
+                disabled = false;
               }
               return (
                 <button key={k} type="button"
@@ -1253,14 +1364,12 @@ export default function App() {
   const [notifCnt,     setNotifCnt]     = useState(0);
   const menuRef = useRef(null);
 
-  // Tutup menu saat klik luar
   useEffect(()=>{
     const h=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
 
-  // Firebase Auth listener
   useEffect(()=>{
     const adminEmail = import.meta.env.VITE_ADMIN_EMAIL||"awianton2@gmail.com";
     return onAuthStateChanged(auth,(user)=>{
@@ -1269,7 +1378,6 @@ export default function App() {
     });
   },[]);
 
-  // Produk realtime
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
     return onSnapshot(q,
@@ -1278,7 +1386,6 @@ export default function App() {
     );
   },[]);
 
-  // Notif badge admin
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"orders"),where("status","in",["pending","paid_pending_confirm"]));
@@ -1323,7 +1430,6 @@ export default function App() {
   const closeMenu=()=>setMenuOpen(false);
   const handleLogout=()=>{ signOut(auth); setIsAdmin(false); setShowACP(false); };
 
-  // Hitung pesanan aktif user dari localStorage
   const myActiveOrders = lsGet().filter(o=>o.status&&!["done","cancelled"].includes(o.status)).length;
 
   return (
@@ -1592,14 +1698,12 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .loc-msg.ok{color:var(--green)}
 .loc-msg.err{color:var(--red)}
 .ord-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.8rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-/* Courier type dropdown selector */
 .courier-select{cursor:pointer}
 .ship-manual-note{padding:11px 13px;background:#7c6af514;border:1px solid #7c6af530;border-radius:10px;font-size:.8rem;color:var(--text2);line-height:1.7}
 .ship-manual-note strong{color:var(--accent)}
 .ship-manual-note.ready{background:#4caf8214;border-color:#4caf8230}
 .ship-manual-price{font-size:1.1rem;font-weight:700;color:var(--green);margin-top:4px}
 .ord-total-note{font-size:.7rem;color:var(--text3);margin-top:2px;font-style:italic}
-/* Admin: Atur Tarif Pengiriman */
 .ship-admin-desc{font-size:.8rem;color:var(--text3);line-height:1.6;margin-bottom:14px}
 .ship-rates-list{display:flex;flex-direction:column;gap:10px}
 .ship-rate-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)}
@@ -1607,7 +1711,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .ship-rate-input-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
 .ship-rate-input-wrap span{font-size:.8rem;color:var(--text3)}
 .ship-rate-input{width:100px;text-align:right;padding:7px 9px}
-/* Shipping cost UI */
 .ship-section{position:relative}
 .ship-city-search{position:relative;display:flex;align-items:center}
 .ship-loading-dot{position:absolute;right:10px;font-size:.8rem}
@@ -1661,18 +1764,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .del-confirm-bar span{flex:1}
 .btn-yes-del{padding:4px 12px;border-radius:6px;border:none;background:var(--red);color:#fff;font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
 .btn-no-del{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
-/* Buyer confirm box */
 .buyer-confirm-box{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
 .btn-buyer-confirm{width:100%;padding:11px;border-radius:10px;border:none;background:#4caf82;color:#fff;font-weight:700;font-size:.88rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-buyer-confirm:hover:not(:disabled){background:#3d9e70}
 .btn-buyer-confirm:disabled{opacity:.6;cursor:not-allowed}
-/* Buyer thankyou box — permanen setelah konfirmasi */
 .buyer-thankyou-box{padding:14px 16px;background:#4caf8218;border-bottom:1px solid #4caf8233;flex-shrink:0;text-align:center}
 .buyer-thankyou-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--green);margin-bottom:4px;font-weight:700}
 .buyer-thankyou-sub{font-size:.8rem;color:var(--text2);line-height:1.6;margin-bottom:10px}
 .btn-wa-help{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#25d366;color:#fff;font-weight:600;font-size:.8rem;text-decoration:none;transition:all .2s}
 .btn-wa-help:hover{background:#1da851}
-/* Admin panel */
 .acp{padding:16px;min-height:380px}
 .acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:0;display:flex;align-items:center;gap:7px;color:var(--text)}
 .acp-list{display:flex;flex-direction:column;gap:8px}
