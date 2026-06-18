@@ -900,7 +900,6 @@ function ShippingRatesAdmin({onClose}) {
       </form>
     </div>
   );
-}
 
 // ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
 function AdminChatPanel({onLogout}) {
