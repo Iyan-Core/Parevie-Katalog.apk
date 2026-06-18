@@ -861,7 +861,8 @@ function ShippingRatesAdmin({onClose}) {
   );
 }
 
-
+// ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
+function AdminLogin({onLogin}) {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -900,6 +901,7 @@ function ShippingRatesAdmin({onClose}) {
       </form>
     </div>
   );
+}
 
 // ─── ADMIN CHAT PANEL ─────────────────────────────────────────────────────
 function AdminChatPanel({onLogout}) {
