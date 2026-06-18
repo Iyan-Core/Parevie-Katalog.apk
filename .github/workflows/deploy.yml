@@ -13,7 +13,6 @@ jobs:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      # ── Java dulu, sebelum Gradle ──────────────────────────────────
       - name: ☕ Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -24,12 +23,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          # cache dihapus karena tidak ada lock file
 
       - name: 📦 Install dependencies
-        run: npm ci
+        run: npm install --no-fund --no-audit
 
-      # ── Build React → dist/ ────────────────────────────────────────
       - name: 🏗️ Build React app
         run: npm run build
         env:
@@ -40,20 +38,20 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
+          RAJAONGKIR_API_KEY: ${{ secrets.RAJAONGKIR_API_KEY }}
 
-      # ── Capacitor: install → copy (TANPA cap init, karena
-      #    capacitor.config.json sudah ada di repo) ───────────────────
+      # ─── Langkah ini DIHAPUS (tidak lagi menimpa capacitor.config.json) ───
+
       - name: 📱 Install Capacitor
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
       - name: 📂 Sync Capacitor → Android
         run: |
-          npx cap add android || true   # skip jika folder android sudah ada
+          npx cap add android || true
           npx cap copy android
           npx cap sync android
 
-      # ── Gradle build ───────────────────────────────────────────────
       - name: 🔨 Build APK (debug)
         run: |
           cd android
@@ -63,7 +61,6 @@ jobs:
             --stacktrace \
             -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"
 
-      # ── Upload hasil ───────────────────────────────────────────────
       - name: 📤 Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
