@@ -23,7 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          # cache dihapus karena tidak ada lock file
 
       - name: 📦 Install dependencies
         run: npm install --no-fund --no-audit
@@ -44,10 +43,10 @@ jobs:
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
-      # ─── Buat capacitor.config.json ──────────────────────────────────
-      - name: 📝 Create capacitor.config.json
+      - name: 📝 Create capacitor.config.json if missing
         run: |
-          cat > capacitor.config.json << EOF
+          if [ ! -f capacitor.config.json ]; then
+            cat > capacitor.config.json << EOF
           {
             "appId": "com.katalogpro.app",
             "appName": "KatalogPro",
@@ -58,26 +57,27 @@ jobs:
             }
           }
           EOF
+            echo "✅ capacitor.config.json dibuat"
+          else
+            echo "✅ capacitor.config.json sudah ada"
+          fi
 
-      # ─── Tambah Android platform (skip jika sudah ada) ──────────────
-      - name: 📂 Add Android platform
+      - name: 📂 Add Android platform (skip if exists)
         run: |
           npx cap add android || true
 
-      # ─── Sync Capacitor → Android ─────────────────────────────────────
       - name: 📂 Sync Capacitor → Android
         run: |
           npx cap copy android
           npx cap sync android
 
-      # ─── Tambahkan izin lokasi ke AndroidManifest.xml ─────────────────
       - name: 📝 Add location permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             if ! grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
               sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
-              echo "✅ Izin lokasi ditambahkan ke AndroidManifest.xml"
+              echo "✅ Izin lokasi ditambahkan"
             else
               echo "✅ Izin lokasi sudah ada"
             fi
@@ -122,20 +122,27 @@ jobs:
               </application>
           </manifest>
           EOF
+            echo "✅ AndroidManifest.xml dibuat dengan izin lokasi"
           fi
 
-      # ─── Pastikan gradlew executable ──────────────────────────────────
-      - name: 🔧 Make gradlew executable
+      - name: 🔍 Check gradlew exists
         run: |
           if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-            echo "✅ gradlew siap"
+            echo "✅ gradlew ditemukan"
           else
-            echo "❌ gradlew tidak ditemukan! Mungkin sync gagal."
-            exit 1
+            echo "❌ gradlew tidak ditemukan! Mencoba sync ulang..."
+            npx cap sync android
+            if [ -f "android/gradlew" ]; then
+              echo "✅ gradlew ditemukan setelah sync ulang"
+            else
+              echo "❌ Gagal membuat gradlew. Periksa log."
+              exit 1
+            fi
           fi
 
-      # ─── Build APK ─────────────────────────────────────────────────────
+      - name: 🔧 Make gradlew executable
+        run: chmod +x android/gradlew
+
       - name: 🔨 Build APK (debug)
         run: |
           cd android
@@ -144,7 +151,6 @@ jobs:
             --stacktrace \
             -Dorg.gradle.jvmargs="-Xmx2g -XX:MaxMetaspaceSize=512m"
 
-      # ─── Upload APK ────────────────────────────────────────────────────
       - name: 📤 Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
