@@ -239,7 +239,6 @@ function OrderModal({p}) {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
     try {
-      // Minta izin secara eksplisit
       const perm = await Geolocation.requestPermissions();
       if (perm.location !== 'granted') {
         setLocState("error");
@@ -375,7 +374,7 @@ function OrderModal({p}) {
       if (courierType !== "jne" && finalShippingCost===0 && !manualRates[courierType]) {
         await addDoc(collection(db,`orders/${oRef.id}/chats`),{
           from:"system",
-          text:`📍 Mohon admin set tarif ${COURIER_LABEL[courierType]||courierType} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
+          text:`❗ Mohon admin set tarif ${COURIER_LABEL[courierType]||courierType} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
           createdAt:serverTimestamp(),
         });
       }
@@ -717,10 +716,12 @@ function UserChatPanel() {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
+  // ── Buyer confirm received ── dengan notifikasi ke admin ──
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
+      // Update hanya field yang diizinkan di rules
       await updateDoc(doc(db,"orders",selOrd),{
         buyerConfirmed: true,
         buyerConfirmedAt: serverTimestamp(),
@@ -730,7 +731,20 @@ function UserChatPanel() {
         text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
         createdAt:serverTimestamp(),
       });
-    } catch(e){ alert("Gagal konfirmasi: "+e.message); }
+      // Kirim notifikasi ke admin
+      const orderSnap = await getDoc(doc(db,"orders",selOrd));
+      const order = orderSnap.data();
+      await addDoc(collection(db,"notifications"),{
+        type:"buyer_confirmed",
+        orderId: selOrd,
+        message:`✅ Buyer konfirmasi terima: ${order?.productName||"pesanan"}`,
+        detail:`Pesanan dari ${order?.buyerName||"buyer"} sudah diterima.`,
+        read:false,
+        createdAt:serverTimestamp(),
+      });
+    } catch(e){
+      alert("Gagal konfirmasi: "+e.message);
+    }
     setConfirming(false);
   };
 
