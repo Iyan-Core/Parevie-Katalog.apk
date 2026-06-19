@@ -44,7 +44,7 @@ jobs:
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
-      # ─── Buat capacitor.config.json (jika tidak ada) ────────────────────
+      # ─── Buat capacitor.config.json ──────────────────────────────────
       - name: 📝 Create capacitor.config.json
         run: |
           cat > capacitor.config.json << EOF
@@ -59,10 +59,10 @@ jobs:
           }
           EOF
 
-      # ─── Tambah platform Android ──────────────────────────────────────
+      # ─── Tambah Android platform (skip jika sudah ada) ──────────────
       - name: 📂 Add Android platform
         run: |
-          npx cap add android
+          npx cap add android || true
 
       # ─── Sync Capacitor → Android ─────────────────────────────────────
       - name: 📂 Sync Capacitor → Android
@@ -82,7 +82,56 @@ jobs:
               echo "✅ Izin lokasi sudah ada"
             fi
           else
-            echo "❌ AndroidManifest.xml tidak ditemukan di $MANIFEST"
+            echo "⚠️ AndroidManifest.xml tidak ditemukan, membuat default..."
+            mkdir -p android/app/src/main
+            cat > "$MANIFEST" << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="com.katalogpro.app">
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="@string/app_name"
+                  android:roundIcon="@mipmap/ic_launcher_round"
+                  android:supportsRtl="true"
+                  android:theme="@style/AppTheme"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+                      android:exported="true"
+                      android:label="@string/title_activity_main"
+                      android:launchMode="singleTask"
+                      android:theme="@style/AppTheme.NoActionBarLaunch">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="\${applicationId}.fileprovider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/file_paths" />
+                  </provider>
+              </application>
+          </manifest>
+          EOF
+          fi
+
+      # ─── Pastikan gradlew executable ──────────────────────────────────
+      - name: 🔧 Make gradlew executable
+        run: |
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "✅ gradlew siap"
+          else
+            echo "❌ gradlew tidak ditemukan! Mungkin sync gagal."
             exit 1
           fi
 
@@ -90,7 +139,6 @@ jobs:
       - name: 🔨 Build APK (debug)
         run: |
           cd android
-          chmod +x gradlew
           ./gradlew assembleDebug \
             --no-daemon \
             --stacktrace \
