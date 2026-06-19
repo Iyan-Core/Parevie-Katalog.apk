@@ -43,10 +43,9 @@ jobs:
         run: |
           npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
 
-      - name: 📝 Create capacitor.config.json if missing
+      - name: 📝 Create capacitor.config.json
         run: |
-          if [ ! -f capacitor.config.json ]; then
-            cat > capacitor.config.json << EOF
+          cat > capacitor.config.json << EOF
           {
             "appId": "com.katalogpro.app",
             "appName": "KatalogPro",
@@ -57,19 +56,15 @@ jobs:
             }
           }
           EOF
-            echo "✅ capacitor.config.json dibuat"
-          else
-            echo "✅ capacitor.config.json sudah ada"
-          fi
 
-      - name: 📂 Add Android platform (skip if exists)
-        run: |
-          npx cap add android || true
+      - name: 🗑️ Remove existing android folder (if any)
+        run: rm -rf android
+
+      - name: 📂 Add Android platform (fresh)
+        run: npx cap add android
 
       - name: 📂 Sync Capacitor → Android
-        run: |
-          npx cap copy android
-          npx cap sync android
+        run: npx cap sync android
 
       - name: 📝 Add location permissions to AndroidManifest.xml
         run: |
@@ -84,7 +79,7 @@ jobs:
           else
             echo "⚠️ AndroidManifest.xml tidak ditemukan, membuat default..."
             mkdir -p android/app/src/main
-            cat > "$MANIFEST" << EOF
+            cat > "$MANIFEST" << EOF2
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="com.katalogpro.app">
@@ -121,23 +116,8 @@ jobs:
                   </provider>
               </application>
           </manifest>
-          EOF
-            echo "✅ AndroidManifest.xml dibuat dengan izin lokasi"
-          fi
-
-      - name: 🔍 Check gradlew exists
-        run: |
-          if [ -f "android/gradlew" ]; then
-            echo "✅ gradlew ditemukan"
-          else
-            echo "❌ gradlew tidak ditemukan! Mencoba sync ulang..."
-            npx cap sync android
-            if [ -f "android/gradlew" ]; then
-              echo "✅ gradlew ditemukan setelah sync ulang"
-            else
-              echo "❌ Gagal membuat gradlew. Periksa log."
-              exit 1
-            fi
+          EOF2
+            echo "✅ AndroidManifest.xml dibuat"
           fi
 
       - name: 🔧 Make gradlew executable
