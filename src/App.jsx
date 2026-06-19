@@ -234,11 +234,18 @@ function OrderModal({p}) {
     }
   },[buyerCoords, adminCoords, ratePerKm]);
 
-  // ── Fungsi GPS dengan Capacitor ──
+  // ── Fungsi GPS dengan Capacitor + requestPermissions ──
   const getLocation = async () => {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
     try {
+      // Minta izin secara eksplisit
+      const perm = await Geolocation.requestPermissions();
+      if (perm.location !== 'granted') {
+        setLocState("error");
+        setGpsText("Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan");
+        return;
+      }
       const coords = await Geolocation.getCurrentPosition({
         enableHighAccuracy: true,
         timeout: 15000,
@@ -315,19 +322,17 @@ function OrderModal({p}) {
     if (!addr.trim()) return alert("Alamat pengiriman wajib diisi!");
     setSub(true);
     try {
-      // Tentukan ongkir akhir: jika JNE pakai shipSelected, jika manual & ada ratePerKm pakai jarak
       let finalShippingCost = 0;
       if (courierType === "jne") {
         finalShippingCost = shipSelected?.cost || 0;
       } else {
-        // Kurir manual: prioritas tarif flat manual, lalu ratePerKm jika ada jarak
         const flat = manualRates[courierType];
         if (typeof flat === "number" && flat >= 0) {
           finalShippingCost = flat;
         } else if (distance && ratePerKm > 0) {
           finalShippingCost = distance * ratePerKm;
         } else {
-          finalShippingCost = 0; // akan jadi "belum diatur"
+          finalShippingCost = 0;
         }
       }
       const total = p.price + finalShippingCost;
@@ -344,7 +349,6 @@ function OrderModal({p}) {
         shippingCost: finalShippingCost,
         shippingPending: (courierType!=="jne" && finalShippingCost===0 && !manualRates[courierType]),
         totalAmount: total,
-        // simpan data jarak jika ada
         distance: distance || null,
         ratePerKm: ratePerKm || 0,
         adminCoords: adminCoords || null,
@@ -352,7 +356,6 @@ function OrderModal({p}) {
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
-      // localStorage
       const existing = lsGet();
       if (!existing.find(o=>o.orderId===oRef.id)) {
         lsSet([{orderId:oRef.id, productName:p.name, productImg:getImg(p),
@@ -434,7 +437,6 @@ function OrderModal({p}) {
 
   const flatManualCost = manualRates[courierType];
   const hasFlatManual = typeof flatManualCost === "number" && flatManualCost >= 0;
-  // Ongkir akhir untuk preview
   let previewShipping = 0;
   if (courierType === "jne") {
     previewShipping = shipSelected?.cost || 0;
@@ -477,7 +479,6 @@ function OrderModal({p}) {
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
 
-        {/* ── Pilih Jenis Pengiriman ── */}
         <div className="fg">
           <label>🚚 Pilih Jenis Pengiriman</label>
           <select className="finput courier-select" value={courierType}
@@ -492,7 +493,6 @@ function OrderModal({p}) {
           </select>
         </div>
 
-        {/* ── JNE ── */}
         {courierType==="jne" && (
           <div className="fg ship-section">
             <label>Hitung Ongkos Kirim JNE</label>
@@ -537,7 +537,6 @@ function OrderModal({p}) {
           </div>
         )}
 
-        {/* ── Kurir manual ── */}
         {courierType!=="jne" && (
           <div className="fg">
             {loadingRates ? (
@@ -566,7 +565,6 @@ function OrderModal({p}) {
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
         </div>
 
-        {/* ── Ringkasan Total ── */}
         <div className="ord-total-box">
           <div className="ord-total-row"><span>Harga produk</span><span>{fRp(p.price)}</span></div>
           {distance!==null && courierType!=="jne" && (
@@ -925,7 +923,6 @@ function ShippingRatesAdmin({onClose}) {
         <p className="chat-empty">Memuat tarif…</p>
       ) : (
         <>
-          {/* ── Tarif per km ── */}
           <div className="ship-rate-row" style={{marginBottom:12}}>
             <span className="ship-rate-label">📏 Tarif per km (Rp)</span>
             <div className="ship-rate-input-wrap">
@@ -948,7 +945,6 @@ function ShippingRatesAdmin({onClose}) {
             ⚠️ Koordinat toko digunakan untuk menghitung jarak ke buyer. Dapatkan dari Google Maps (klik kanan → koordinat).
           </p>
 
-          {/* ── Tarif flat ── */}
           <div className="ship-rates-list">
             {COURIERS.map(c=>(
               <div key={c.key} className="ship-rate-row">
