@@ -178,19 +178,16 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── Jenis pengiriman ──
   const [courierType, setCourierType] = useState("jne");
   const [manualRates, setManualRates] = useState({});
   const [loadingRates, setLoadingRates] = useState(true);
 
-  // ── Tarif per km & koordinat admin ──
   const [ratePerKm, setRatePerKm] = useState(0);
   const [adminCoords, setAdminCoords] = useState(null);
   const [buyerCoords, setBuyerCoords] = useState(null);
   const [distance, setDistance] = useState(null);
   const [shippingCostFromDist, setShippingCostFromDist] = useState(0);
 
-  // ── RajaOngkir ──
   const [destKeyword, setDestKeyword]   = useState("");
   const [destOptions, setDestOptions]   = useState([]);
   const [destCity,    setDestCity]      = useState(null);
@@ -204,7 +201,6 @@ function OrderModal({p}) {
   const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
   const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || "";
 
-  // ── Ambil data tarif & lokasi admin dari Firestore ──
   useEffect(()=>{
     const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
       const data = snap.data();
@@ -222,7 +218,6 @@ function OrderModal({p}) {
     return ()=>unsub();
   },[]);
 
-  // ── Hitung ulang ongkir setiap kali buyerCoords, adminCoords, ratePerKm berubah ──
   useEffect(()=>{
     if(buyerCoords && adminCoords && ratePerKm>0){
       const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
@@ -234,7 +229,6 @@ function OrderModal({p}) {
     }
   },[buyerCoords, adminCoords, ratePerKm]);
 
-  // ── Fungsi GPS dengan Capacitor + requestPermissions ──
   const getLocation = async () => {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
@@ -271,7 +265,6 @@ function OrderModal({p}) {
     }
   };
 
-  // ── Cari kota untuk JNE ──
   const searchCity = async (kw) => {
     setDestKeyword(kw);
     setDestCity(null);
@@ -314,7 +307,6 @@ function OrderModal({p}) {
     setLoadingShip(false);
   };
 
-  // ── Submit order ──
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
@@ -716,12 +708,10 @@ function UserChatPanel() {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  // ── Buyer confirm received ── dengan notifikasi ke admin ──
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
-      // Update hanya field yang diizinkan di rules
       await updateDoc(doc(db,"orders",selOrd),{
         buyerConfirmed: true,
         buyerConfirmedAt: serverTimestamp(),
@@ -731,7 +721,6 @@ function UserChatPanel() {
         text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
         createdAt:serverTimestamp(),
       });
-      // Kirim notifikasi ke admin
       const orderSnap = await getDoc(doc(db,"orders",selOrd));
       const order = orderSnap.data();
       await addDoc(collection(db,"notifications"),{
@@ -855,7 +844,7 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN: Atur Tarif Pengiriman Manual + per km ──────────────────────
+// ─── ADMIN: Atur Tarif Pengiriman ──────────────────────────────────────
 function ShippingRatesAdmin({onClose}) {
   const COURIERS = [
     {key:"gosend",     label:"GoSend (Gojek)", icon:"🛵"},
@@ -948,15 +937,20 @@ function ShippingRatesAdmin({onClose}) {
           </div>
           <div className="ship-rate-row" style={{marginBottom:12}}>
             <span className="ship-rate-label">📍 Koordinat Toko</span>
-            <div style={{display:"flex", gap:8, flex:1}}>
-              <input type="text" className="finput" placeholder="Latitude (contoh: -6.1234)"
-                value={adminLat} onChange={e=>{setAdminLat(e.target.value); setSaved(false);}}/>
-              <input type="text" className="finput" placeholder="Longitude (contoh: 106.4567)"
-                value={adminLng} onChange={e=>{setAdminLng(e.target.value); setSaved(false);}}/>
+            <div style={{display:"flex", gap:8, flex:1, flexDirection:"column"}}>
+              <div style={{display:"flex", gap:8}}>
+                <input type="text" className="finput" placeholder="-7.69382 (pakai minus untuk selatan)"
+                  value={adminLat} onChange={e=>{setAdminLat(e.target.value); setSaved(false);}}/>
+                <input type="text" className="finput" placeholder="110.574111"
+                  value={adminLng} onChange={e=>{setAdminLng(e.target.value); setSaved(false);}}/>
+              </div>
+              <p style={{fontSize:".7rem",color:"var(--red)",marginTop:0}}>
+                ⚠️ Pastikan latitude pakai tanda MINUS jika di selatan khatulistiwa (contoh: -7.69382).
+              </p>
             </div>
           </div>
           <p style={{fontSize:".7rem",color:"var(--text3)",marginBottom:12}}>
-            ⚠️ Koordinat toko digunakan untuk menghitung jarak ke buyer. Dapatkan dari Google Maps (klik kanan → koordinat).
+            Koordinat toko digunakan untuk menghitung jarak ke buyer. Dapatkan dari Google Maps (klik kanan → koordinat).
           </p>
 
           <div className="ship-rates-list">
