@@ -182,6 +182,52 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
+  // ── Daftar kurir ──
+  const RAJAONGKIR_COURIERS = [
+    { key: "jne", label: "JNE" },
+    { key: "tiki", label: "TIKI" },
+    { key: "pos", label: "POS Indonesia" },
+    { key: "jnt", label: "J&T Express" },
+    { key: "sicepat", label: "SiCepat" },
+    { key: "wahana", label: "Wahana" },
+    { key: "ide", label: "ID Express" },
+    { key: "ninja", label: "Ninja Xpress" },
+    { key: "lion", label: "Lion Parcel" },
+    { key: "ncs", label: "NCS" },
+    { key: "pcp", label: "PCP" },
+    { key: "rex", label: "Royal Express" },
+    { key: "sentral", label: "Sentral Cargo" },
+    { key: "sap", label: "SAP Express" },
+    { key: "pandu", label: "Pandu" },
+    { key: "pahala", label: "Pahala" },
+    { key: "first", label: "First Logistics" },
+    { key: "nss", label: "NSS Express" },
+    { key: "idl", label: "IDL Cargo" },
+    { key: "pop", label: "PopExpress" },
+    { key: "rcl", label: "Red Carpet" },
+    { key: "exaq", label: "Exaq Logistics" },
+    { key: "dakota", label: "Dakota Cargo" },
+    { key: "zona", label: "Zona Express" },
+    { key: "alfatrex", label: "Alfatrex" },
+    { key: "anteraja", label: "AnterAja" },
+    { key: "kerry", label: "Kerry Express" },
+    { key: "lge", label: "Logika Express" },
+    { key: "siap", label: "SiAP Express" },
+    { key: "trawlens", label: "Trawlbens" },
+    { key: "jtl", label: "Jagad Total Logistic" },
+    { key: "mas", label: "Merpati Alam Semesta" },
+    { key: "zataka", label: "Zataka" },
+    { key: "mpx", label: "MPXGO" },
+    { key: "batt", label: "Batt Cargo" }
+  ];
+  const MANUAL_COURIERS = [
+    { key: "gosend", label: "GoSend (Gojek)" },
+    { key: "grab", label: "Grab Express" },
+    { key: "lalamove", label: "Lalamove" },
+    { key: "kurir_toko", label: "Kurir Toko Sendiri" }
+  ];
+
+  // ── State ──
   const [courierType, setCourierType] = useState("jne");
   const [manualRates, setManualRates] = useState({});
   const [loadingRates, setLoadingRates] = useState(true);
@@ -194,6 +240,7 @@ function OrderModal({p}) {
   const [orsApiKey, setOrsApiKey] = useState("");
   const [distanceMethod, setDistanceMethod] = useState("haversine");
 
+  // ── RajaOngkir city search ──
   const [destKeyword, setDestKeyword]   = useState("");
   const [destOptions, setDestOptions]   = useState([]);
   const [destCity,    setDestCity]      = useState(null);
@@ -207,6 +254,7 @@ function OrderModal({p}) {
   const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
   const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || "";
 
+  // ── Ambil data tarif & ORS key dari Firestore ──
   useEffect(()=>{
     const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
       const data = snap.data();
@@ -226,6 +274,7 @@ function OrderModal({p}) {
     return ()=>unsub();
   },[]);
 
+  // ── Hitung jarak ORS ──
   useEffect(()=>{
     if(!buyerCoords || !adminCoords) {
       setDistance(null);
@@ -267,6 +316,7 @@ function OrderModal({p}) {
     }
   }, [buyerCoords, adminCoords, orsApiKey]);
 
+  // ── Fungsi GPS ──
   const getLocation = async () => {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
@@ -303,6 +353,7 @@ function OrderModal({p}) {
     }
   };
 
+  // ── Cari kota (untuk semua kurir RajaOngkir) ──
   const searchCity = async (kw) => {
     setDestKeyword(kw);
     setDestCity(null);
@@ -334,8 +385,8 @@ function OrderModal({p}) {
         body: JSON.stringify({
           origin: ORIGIN_CITY_ID,
           destination: city.city_id,
-          weight: 200,
-          courier: "jne",
+          weight: 200, // berat default (gram) — bisa disesuaikan per produk nanti
+          courier: courierType, // kirim kurir yang dipilih
         }),
       });
       const data = await r.json();
@@ -345,6 +396,7 @@ function OrderModal({p}) {
     setLoadingShip(false);
   };
 
+  // ── Submit order ──
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
@@ -352,9 +404,11 @@ function OrderModal({p}) {
     setSub(true);
     try {
       let finalShippingCost = 0;
-      if (courierType === "jne") {
+      const isRajaOngkir = RAJAONGKIR_COURIERS.some(c => c.key === courierType);
+      if (isRajaOngkir) {
         finalShippingCost = shipSelected?.cost || 0;
       } else {
+        // manual courier
         const flat = manualRates[courierType];
         if (typeof flat === "number" && flat >= 0) {
           finalShippingCost = flat;
@@ -371,12 +425,12 @@ function OrderModal({p}) {
         price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
         address:addr.trim(), note:note.trim(), status:"pending",
         courierType: courierType,
-        courierLabel: COURIER_LABEL[courierType] || courierType,
+        courierLabel: getCourierLabel(courierType),
         shippingCity: destCity?.city_name || "",
         shippingCourier: shipSelected?.courier || "",
         shippingService: shipSelected?.service || "",
         shippingCost: finalShippingCost,
-        shippingPending: (courierType!=="jne" && finalShippingCost===0 && !manualRates[courierType]),
+        shippingPending: (!isRajaOngkir && finalShippingCost===0 && !manualRates[courierType]),
         totalAmount: total,
         distance: distance || null,
         distanceMethod: distanceMethod || "haversine",
@@ -394,18 +448,18 @@ function OrderModal({p}) {
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
         message:`🛒 Pesanan baru: ${p.name}`,
-        detail:`Dari: ${name.trim()} (${phone.trim()})${finalShippingCost===0 && courierType!=="jne" ? ` · 🚨 Perlu set tarif ${COURIER_LABEL[courierType]}`:""}`,
+        detail:`Dari: ${name.trim()} (${phone.trim()})${finalShippingCost===0 && !isRajaOngkir ? ` · 🚨 Perlu set tarif ${getCourierLabel(courierType)}` : ""}`,
         address:addr.trim(), read:false, createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]||courierType}${finalShippingCost>0?` (${fRp(finalShippingCost)})`:""}${distance?` · Jarak ${distance.toFixed(1)} km (${distanceMethod==="ors"?"ORS":"estimasi"})`:""}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${getCourierLabel(courierType)}${finalShippingCost>0?` (${fRp(finalShippingCost)})`:""}${distance?` · Jarak ${distance.toFixed(1)} km (${distanceMethod==="ors"?"ORS":"estimasi"})`:""}`,
         createdAt:serverTimestamp(),
       });
-      if (courierType !== "jne" && finalShippingCost===0 && !manualRates[courierType]) {
+      if (!isRajaOngkir && finalShippingCost===0 && !manualRates[courierType]) {
         await addDoc(collection(db,`orders/${oRef.id}/chats`),{
           from:"system",
-          text:`❗ Mohon admin set tarif ${COURIER_LABEL[courierType]||courierType} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
+          text:`❗ Mohon admin set tarif ${getCourierLabel(courierType)} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
           createdAt:serverTimestamp(),
         });
       }
@@ -454,25 +508,22 @@ function OrderModal({p}) {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  const COURIER_LABEL = {
-    jne:      "JNE (Ongkir otomatis)",
-    jnt:      "JNT (Tarif per km)",
-    sicepat:  "SiCepat (Tarif per km)",
-    gosend:   "GoSend (Gojek)",
-    grab:     "Grab Express",
-    lalamove: "Lalamove",
-    pos:      "Kantor Pos (POS)",
-    kurir_toko: "Kurir Toko Sendiri",
+  // ── Helper label ──
+  const getCourierLabel = (key) => {
+    const found = [...RAJAONGKIR_COURIERS, ...MANUAL_COURIERS].find(c => c.key === key);
+    return found ? found.label : key;
   };
-  const MANUAL_COURIERS = Object.keys(COURIER_LABEL).filter(k=>k!=="jne");
 
-  const flatManualCost = manualRates[courierType];
-  const hasFlatManual = typeof flatManualCost === "number" && flatManualCost >= 0;
+  const isRajaOngkirCourier = (key) => RAJAONGKIR_COURIERS.some(c => c.key === key);
+  const isManualCourier = (key) => MANUAL_COURIERS.some(c => c.key === key);
+
+  // ── Ongkir preview ──
   let previewShipping = 0;
-  if (courierType === "jne") {
+  if (isRajaOngkirCourier(courierType)) {
     previewShipping = shipSelected?.cost || 0;
   } else {
-    if (hasFlatManual) previewShipping = flatManualCost;
+    const flat = manualRates[courierType];
+    if (typeof flat === "number" && flat >= 0) previewShipping = flat;
     else if (distance && ratePerKm > 0) previewShipping = distance * ratePerKm;
     else previewShipping = 0;
   }
@@ -513,23 +564,28 @@ function OrderModal({p}) {
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
 
+        {/* ─── Pilih Kurir ──────────────────────────────────────────────── */}
         <div className="fg">
           <label>🚚 Pilih Kurir</label>
           <select className="finput courier-select" value={courierType}
             onChange={e=>setCourierType(e.target.value)}>
-            <option value="jne">📦 JNE — Ongkir otomatis</option>
-            {MANUAL_COURIERS.map(k=>(
-              <option key={k} value={k}>
-                {k==="jnt"?"📮":k==="sicepat"?"📬":k==="gosend"?"🛵":k==="grab"?"🟢":k==="lalamove"?"🚚":k==="pos"?"📫":"🏪"} {COURIER_LABEL[k]}
-                {typeof manualRates[k]==="number" ? ` — ${fRp(manualRates[k])}` : distance && ratePerKm>0 ? ` — ${fRp(distance*ratePerKm)} (per km)` : " — Diatur admin"}
-              </option>
-            ))}
+            <optgroup label="📦 Ekspedisi via RajaOngkir">
+              {RAJAONGKIR_COURIERS.map(c=>(
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="🛵 Kurir Instant (per km)">
+              {MANUAL_COURIERS.map(c=>(
+                <option key={c.key} value={c.key}>{c.label}</option>
+              ))}
+            </optgroup>
           </select>
         </div>
 
-        {courierType==="jne" && (
+        {/* ─── Jika kurir RajaOngkir ────────────────────────────────────── */}
+        {isRajaOngkirCourier(courierType) && (
           <div className="fg ship-section">
-            <label>Hitung Ongkos Kirim JNE</label>
+            <label>Hitung Ongkos Kirim {getCourierLabel(courierType)}</label>
             <div className="ship-city-search">
               <input className="finput" value={destKeyword}
                 onChange={e=>searchCity(e.target.value)}
@@ -548,7 +604,7 @@ function OrderModal({p}) {
             )}
             {!FN_SEARCH_CITY && (
               <p className="ship-msg err">
-                ⚠️ Fitur ongkir JNE belum aktif. Admin perlu deploy Cloud Function & isi URL di pengaturan.
+                ⚠️ Fitur ongkir RajaOngkir belum aktif. Admin perlu deploy Cloud Function & isi URL di pengaturan.
               </p>
             )}
             {loadingShip && <p className="ship-msg">⏳ Menghitung ongkos kirim…</p>}
@@ -571,38 +627,44 @@ function OrderModal({p}) {
           </div>
         )}
 
-        {courierType!=="jne" && (
+        {/* ─── Jika kurir manual ────────────────────────────────────────── */}
+        {isManualCourier(courierType) && (
           <div className="fg">
             {loadingRates ? (
               <p className="ship-msg">⏳ Memuat tarif…</p>
-            ) : hasFlatManual ? (
-              <div className="ship-manual-note ready">
-                <p>✅ Ongkir <strong>{COURIER_LABEL[courierType]}</strong> sudah ditentukan:</p>
-                <p className="ship-manual-price">{fRp(flatManualCost)}</p>
-              </div>
-            ) : distance && ratePerKm>0 ? (
-              <div className="ship-manual-note ready">
-                <p>📏 Jarak <strong>{distance.toFixed(1)} km</strong> × Rp{ratePerKm}/km</p>
-                <p className="ship-manual-price">{fRp(distance * ratePerKm)}</p>
-                {distanceMethod==="ors" && <span style={{fontSize:".7rem",color:"var(--green)"}}>✅ dihitung dengan ORS</span>}
-              </div>
             ) : (
-              <div className="ship-manual-note">
-                <p>Kamu memilih <strong>{COURIER_LABEL[courierType]}</strong>.</p>
-                <p>Ongkos kirim belum ditentukan. {!adminCoords || ratePerKm===0 ? "Admin belum mengatur tarif per km & lokasi toko." : "Aktifkan GPS untuk hitung jarak."}</p>
-              </div>
+              <>
+                {manualRates[courierType] !== undefined ? (
+                  <div className="ship-manual-note ready">
+                    <p>✅ Ongkir <strong>{getCourierLabel(courierType)}</strong> sudah ditentukan:</p>
+                    <p className="ship-manual-price">{fRp(manualRates[courierType])}</p>
+                  </div>
+                ) : distance && ratePerKm>0 ? (
+                  <div className="ship-manual-note ready">
+                    <p>📏 Jarak <strong>{distance.toFixed(1)} km</strong> × Rp{ratePerKm}/km</p>
+                    <p className="ship-manual-price">{fRp(distance * ratePerKm)}</p>
+                    {distanceMethod==="ors" && <span style={{fontSize:".7rem",color:"var(--green)"}}>✅ dihitung dengan ORS</span>}
+                  </div>
+                ) : (
+                  <div className="ship-manual-note">
+                    <p>Kamu memilih <strong>{getCourierLabel(courierType)}</strong>.</p>
+                    <p>Ongkos kirim belum ditentukan. {!adminCoords || ratePerKm===0 ? "Admin belum mengatur tarif per km & lokasi toko." : "Aktifkan GPS untuk hitung jarak."}</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
 
         <div className="ord-info">
-          <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
+          <p>🚚 Pengiriman via <strong>berbagai ekspedisi</strong> sesuai pilihan</p>
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
         </div>
 
+        {/* ─── Ringkasan Total ───────────────────────────────────────────── */}
         <div className="ord-total-box">
           <div className="ord-total-row"><span>Harga produk</span><span>{fRp(p.price)}</span></div>
-          {distance!==null && courierType!=="jne" && (
+          {distance!==null && isManualCourier(courierType) && (
             <div className="ord-total-row">
               <span>Jarak (km)</span>
               <span>{distance.toFixed(1)} {distanceMethod==="ors" && <span className="ors-badge">ORS</span>}</span>
@@ -611,18 +673,18 @@ function OrderModal({p}) {
           <div className="ord-total-row">
             <span>Ongkos kirim</span>
             <span>
-              {courierType==="jne"
+              {isRajaOngkirCourier(courierType)
                 ? (previewShipping>0?fRp(previewShipping):"—")
-                : hasFlatManual ? fRp(flatManualCost)
+                : manualRates[courierType] !== undefined ? fRp(manualRates[courierType])
                 : distance && ratePerKm>0 ? fRp(distance*ratePerKm)
                 : "—"}
             </span>
           </div>
           <div className="ord-total-row total">
-            <span>Total{courierType!=="jne"&&(previewShipping===0)&&"*"}</span>
+            <span>Total{isManualCourier(courierType) && previewShipping===0 ? "*" : ""}</span>
             <span>{fRp(totalWithShipping)}</span>
           </div>
-          {courierType!=="jne" && previewShipping===0 && (
+          {isManualCourier(courierType) && previewShipping===0 && (
             <p className="ord-total-note">*Ongkir akan dikonfirmasi admin</p>
           )}
         </div>
@@ -891,17 +953,13 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN: Atur Tarif Pengiriman ──────────────────────────────────────
+// ─── ADMIN: Atur Tarif (hanya untuk kurir manual) ──────────────────────
 function ShippingRatesAdmin({onClose}) {
-  // JNE TIDAK ADA di sini karena ongkirnya otomatis via RajaOngkir
-  const COURIERS = [
-    {key:"jnt",      label:"JNT",               icon:"📮"},
-    {key:"sicepat",  label:"SiCepat",           icon:"📬"},
-    {key:"gosend",   label:"GoSend (Gojek)",    icon:"🛵"},
-    {key:"grab",     label:"Grab Express",      icon:"🟢"},
-    {key:"lalamove", label:"Lalamove",          icon:"🚚"},
-    {key:"pos",      label:"Kantor Pos (POS)",  icon:"📫"},
-    {key:"kurir_toko", label:"Kurir Toko Sendiri", icon:"🏪"},
+  const MANUAL_COURIERS = [
+    { key: "gosend", label: "GoSend (Gojek)", icon: "🛵" },
+    { key: "grab", label: "Grab Express", icon: "🟢" },
+    { key: "lalamove", label: "Lalamove", icon: "🚚" },
+    { key: "kurir_toko", label: "Kurir Toko Sendiri", icon: "🏪" }
   ];
   const [rates,      setRates]      = useState({});
   const [ratePerKm,  setRatePerKm]  = useState(0);
@@ -971,10 +1029,10 @@ function ShippingRatesAdmin({onClose}) {
 
   return (
     <div className="acp">
-      <h3 className="acp-ttl">🚚 Atur Tarif & Metode Perhitungan</h3>
+      <h3 className="acp-ttl">🚚 Atur Tarif Kurir Instant</h3>
       <p className="ship-admin-desc">
-        Tarif flat untuk ekspedisi tertentu, atau gunakan tarif per km + jarak akurat dengan OpenRouteService (ORS).
-        <br/><span style={{color:"var(--text3)",fontSize:".75rem"}}>⚠️ JNE otomatis via RajaOngkir, tidak perlu diatur.</span>
+        Tarif flat untuk kurir instant (Gojek, Grab, Lalamove, dsb.) atau gunakan tarif per km + jarak akurat dengan ORS.
+        <br/><span style={{color:"var(--text3)",fontSize:".75rem"}}>⚠️ Ekspedisi reguler (JNE, TIKI, dll.) ongkir otomatis via RajaOngkir, tidak perlu diatur.</span>
       </p>
       {loading ? (
         <p className="chat-empty">Memuat tarif…</p>
@@ -1021,7 +1079,7 @@ function ShippingRatesAdmin({onClose}) {
           </p>
 
           <div className="ship-rates-list">
-            {COURIERS.map(c=>(
+            {MANUAL_COURIERS.map(c=>(
               <div key={c.key} className="ship-rate-row">
                 <span className="ship-rate-label">{c.icon} {c.label}</span>
                 <div className="ship-rate-input-wrap">
@@ -1573,7 +1631,6 @@ export default function App() {
         <section className="hero">
           <div className="hero-glow"/>
           <p className="hero-eye">Koleksi Parfum</p>
-          {/* ─── Teks total produk dihapus ─── */}
         </section>
 
         <div className="cats">
