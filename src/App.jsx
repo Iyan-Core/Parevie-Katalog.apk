@@ -182,22 +182,18 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── Courier types ──
   const [courierType, setCourierType] = useState("jne");
   const [manualRates, setManualRates] = useState({});
   const [loadingRates, setLoadingRates] = useState(true);
 
-  // ── Tarif per km & koordinat admin ──
   const [ratePerKm, setRatePerKm] = useState(0);
   const [adminCoords, setAdminCoords] = useState(null);
   const [buyerCoords, setBuyerCoords] = useState(null);
   const [distance, setDistance] = useState(null);
-  const [distanceFromOrs, setDistanceFromOrs] = useState(null);
   const [isLoadingOrs, setIsLoadingOrs] = useState(false);
   const [orsApiKey, setOrsApiKey] = useState("");
   const [distanceMethod, setDistanceMethod] = useState("haversine");
 
-  // ── RajaOngkir ──
   const [destKeyword, setDestKeyword]   = useState("");
   const [destOptions, setDestOptions]   = useState([]);
   const [destCity,    setDestCity]      = useState(null);
@@ -211,7 +207,6 @@ function OrderModal({p}) {
   const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
   const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || "";
 
-  // ── Ambil data tarif & ORS key dari Firestore ──
   useEffect(()=>{
     const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
       const data = snap.data();
@@ -231,11 +226,9 @@ function OrderModal({p}) {
     return ()=>unsub();
   },[]);
 
-  // ── Hitung jarak (ORS jika tersedia, fallback haversine) ──
   useEffect(()=>{
     if(!buyerCoords || !adminCoords) {
       setDistance(null);
-      setDistanceFromOrs(null);
       setDistanceMethod("haversine");
       return;
     }
@@ -250,7 +243,6 @@ function OrderModal({p}) {
           if(data.routes && data.routes.length > 0) {
             const distM = data.routes[0].summary.distance;
             const distKm = distM / 1000;
-            setDistanceFromOrs(distKm);
             setDistanceMethod("ors");
             setDistance(distKm);
           } else {
@@ -275,7 +267,6 @@ function OrderModal({p}) {
     }
   }, [buyerCoords, adminCoords, orsApiKey]);
 
-  // ── Fungsi GPS ──
   const getLocation = async () => {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
@@ -312,7 +303,6 @@ function OrderModal({p}) {
     }
   };
 
-  // ── Cari kota untuk JNE ──
   const searchCity = async (kw) => {
     setDestKeyword(kw);
     setDestCity(null);
@@ -355,7 +345,6 @@ function OrderModal({p}) {
     setLoadingShip(false);
   };
 
-  // ── Submit order ──
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
@@ -465,7 +454,6 @@ function OrderModal({p}) {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  // ─── Courier labels (updated: removed indriver, added pos) ──
   const COURIER_LABEL = {
     jne:      "JNE (Ongkir otomatis)",
     jnt:      "JNT (Tarif per km)",
@@ -903,8 +891,9 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN: Atur Tarif Pengiriman (dengan ORS API Key) ─────────────────
+// ─── ADMIN: Atur Tarif Pengiriman ──────────────────────────────────────
 function ShippingRatesAdmin({onClose}) {
+  // JNE TIDAK ADA di sini karena ongkirnya otomatis via RajaOngkir
   const COURIERS = [
     {key:"jnt",      label:"JNT",               icon:"📮"},
     {key:"sicepat",  label:"SiCepat",           icon:"📬"},
@@ -985,6 +974,7 @@ function ShippingRatesAdmin({onClose}) {
       <h3 className="acp-ttl">🚚 Atur Tarif & Metode Perhitungan</h3>
       <p className="ship-admin-desc">
         Tarif flat untuk ekspedisi tertentu, atau gunakan tarif per km + jarak akurat dengan OpenRouteService (ORS).
+        <br/><span style={{color:"var(--text3)",fontSize:".75rem"}}>⚠️ JNE otomatis via RajaOngkir, tidak perlu diatur.</span>
       </p>
       {loading ? (
         <p className="chat-empty">Memuat tarif…</p>
@@ -1583,7 +1573,7 @@ export default function App() {
         <section className="hero">
           <div className="hero-glow"/>
           <p className="hero-eye">Koleksi Parfum</p>
-          <p className="hero-sub">{list.length} produk tersedia</p>
+          {/* ─── Teks total produk dihapus ─── */}
         </section>
 
         <div className="cats">
@@ -1690,8 +1680,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .hero{position:relative;overflow:hidden;padding:18px 16px 12px;text-align:center}
 .hero-glow{position:absolute;inset:0;background:var(--hero-glow);pointer-events:none}
 .hero-eye{display:inline-block;padding:3px 14px;border:1px solid var(--gold);border-radius:18px;color:var(--gold);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
-.hero-sub{color:var(--text3);font-size:.84rem}
-.cats{display:flex;gap:6px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%}
+.cats{display:flex;justify-content:center;gap:6px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%;flex-wrap:wrap}
 .cats::-webkit-scrollbar{display:none}
 .cat-btn{padding:6px 18px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;color:var(--text3);background:var(--bg3);white-space:nowrap;transition:all .2s;flex-shrink:0}
 .cat-btn:hover{border-color:var(--gold);color:var(--text2)}
