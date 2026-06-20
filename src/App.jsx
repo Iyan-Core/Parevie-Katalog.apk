@@ -57,7 +57,7 @@ const normGender = (g="") => {
 
 const getStock = (p) => Number(p?.stock ?? p?.size ?? 0);
 
-// ─── Haversine (jarak km) ────────────────────────────────────────────────
+// ─── Haversine ────────────────────────────────────────────────────────────
 const haversine = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -67,7 +67,10 @@ const haversine = (lat1, lon1, lat2, lon2) => {
   return R * c;
 };
 
-// ─── LocalStorage helpers ─────────────────────────────────────────────────
+// ─── ORS ──────────────────────────────────────────────────────────────────
+const ORS_BASE = "https://api.openrouteservice.org/v2/directions/driving-car";
+
+// ─── LocalStorage ────────────────────────────────────────────────────────
 const LS_KEY = "parevie_my_orders";
 const lsGet  = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)||"[]"); } catch { return []; } };
 const lsSet  = (arr) => { try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch {} };
@@ -105,6 +108,7 @@ const Ic = {
   Menu:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   Qris:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="21" y1="14" x2="21" y2="17"/></svg>,
   WA:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>,
+  Ors:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 15"/></svg>,
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────
@@ -178,16 +182,22 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
+  // ── Courier types ──
   const [courierType, setCourierType] = useState("jne");
   const [manualRates, setManualRates] = useState({});
   const [loadingRates, setLoadingRates] = useState(true);
 
+  // ── Tarif per km & koordinat admin ──
   const [ratePerKm, setRatePerKm] = useState(0);
   const [adminCoords, setAdminCoords] = useState(null);
   const [buyerCoords, setBuyerCoords] = useState(null);
   const [distance, setDistance] = useState(null);
-  const [shippingCostFromDist, setShippingCostFromDist] = useState(0);
+  const [distanceFromOrs, setDistanceFromOrs] = useState(null);
+  const [isLoadingOrs, setIsLoadingOrs] = useState(false);
+  const [orsApiKey, setOrsApiKey] = useState("");
+  const [distanceMethod, setDistanceMethod] = useState("haversine");
 
+  // ── RajaOngkir ──
   const [destKeyword, setDestKeyword]   = useState("");
   const [destOptions, setDestOptions]   = useState([]);
   const [destCity,    setDestCity]      = useState(null);
@@ -201,6 +211,7 @@ function OrderModal({p}) {
   const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
   const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || "";
 
+  // ── Ambil data tarif & ORS key dari Firestore ──
   useEffect(()=>{
     const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
       const data = snap.data();
@@ -208,27 +219,63 @@ function OrderModal({p}) {
         setManualRates(data.rates||{});
         setRatePerKm(data.ratePerKm||0);
         setAdminCoords(data.adminLocation||null);
+        setOrsApiKey(data.orsApiKey||"");
       } else {
         setManualRates({});
         setRatePerKm(0);
         setAdminCoords(null);
+        setOrsApiKey("");
       }
       setLoadingRates(false);
     }, ()=>setLoadingRates(false));
     return ()=>unsub();
   },[]);
 
+  // ── Hitung jarak (ORS jika tersedia, fallback haversine) ──
   useEffect(()=>{
-    if(buyerCoords && adminCoords && ratePerKm>0){
+    if(!buyerCoords || !adminCoords) {
+      setDistance(null);
+      setDistanceFromOrs(null);
+      setDistanceMethod("haversine");
+      return;
+    }
+
+    if(orsApiKey && orsApiKey.length > 10) {
+      const fetchOrs = async () => {
+        setIsLoadingOrs(true);
+        try {
+          const url = `${ORS_BASE}?api_key=${orsApiKey}&start=${adminCoords.lng},${adminCoords.lat}&end=${buyerCoords.lng},${buyerCoords.lat}`;
+          const res = await fetch(url);
+          const data = await res.json();
+          if(data.routes && data.routes.length > 0) {
+            const distM = data.routes[0].summary.distance;
+            const distKm = distM / 1000;
+            setDistanceFromOrs(distKm);
+            setDistanceMethod("ors");
+            setDistance(distKm);
+          } else {
+            const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
+            setDistance(dist);
+            setDistanceMethod("haversine");
+          }
+        } catch(e) {
+          console.warn("ORS gagal, fallback haversine:", e);
+          const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
+          setDistance(dist);
+          setDistanceMethod("haversine");
+        } finally {
+          setIsLoadingOrs(false);
+        }
+      };
+      fetchOrs();
+    } else {
       const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
       setDistance(dist);
-      setShippingCostFromDist(dist * ratePerKm);
-    } else {
-      setDistance(null);
-      setShippingCostFromDist(0);
+      setDistanceMethod("haversine");
     }
-  },[buyerCoords, adminCoords, ratePerKm]);
+  }, [buyerCoords, adminCoords, orsApiKey]);
 
+  // ── Fungsi GPS ──
   const getLocation = async () => {
     setLocState("loading");
     setGpsText("Mengambil lokasi GPS…");
@@ -265,6 +312,7 @@ function OrderModal({p}) {
     }
   };
 
+  // ── Cari kota untuk JNE ──
   const searchCity = async (kw) => {
     setDestKeyword(kw);
     setDestCity(null);
@@ -307,6 +355,7 @@ function OrderModal({p}) {
     setLoadingShip(false);
   };
 
+  // ── Submit order ──
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
@@ -341,6 +390,7 @@ function OrderModal({p}) {
         shippingPending: (courierType!=="jne" && finalShippingCost===0 && !manualRates[courierType]),
         totalAmount: total,
         distance: distance || null,
+        distanceMethod: distanceMethod || "haversine",
         ratePerKm: ratePerKm || 0,
         adminCoords: adminCoords || null,
         buyerCoords: buyerCoords || null,
@@ -360,7 +410,7 @@ function OrderModal({p}) {
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]||courierType}${finalShippingCost>0?` (${fRp(finalShippingCost)})`:""}${distance?` · Jarak ${distance.toFixed(1)} km`:""}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]||courierType}${finalShippingCost>0?` (${fRp(finalShippingCost)})`:""}${distance?` · Jarak ${distance.toFixed(1)} km (${distanceMethod==="ors"?"ORS":"estimasi"})`:""}`,
         createdAt:serverTimestamp(),
       });
       if (courierType !== "jne" && finalShippingCost===0 && !manualRates[courierType]) {
@@ -415,13 +465,15 @@ function OrderModal({p}) {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
+  // ─── Courier labels (updated: removed indriver, added pos) ──
   const COURIER_LABEL = {
-    jne:    "JNE / SiCepat (Reguler)",
-    gosend: "GoSend (Gojek)",
-    grab:   "Grab Express",
-    maxim:  "Maxim",
-    indriver: "InDriver",
+    jne:      "JNE (Ongkir otomatis)",
+    jnt:      "JNT (Tarif per km)",
+    sicepat:  "SiCepat (Tarif per km)",
+    gosend:   "GoSend (Gojek)",
+    grab:     "Grab Express",
     lalamove: "Lalamove",
+    pos:      "Kantor Pos (POS)",
     kurir_toko: "Kurir Toko Sendiri",
   };
   const MANUAL_COURIERS = Object.keys(COURIER_LABEL).filter(k=>k!=="jne");
@@ -461,9 +513,12 @@ function OrderModal({p}) {
             {locState==="loading"?" Mengambil GPS…":locState==="done"?" Lokasi Tersimpan ✓":locState==="error"?" Coba Lagi":" Tambah Lokasi GPS"}
           </button>
           {gpsText&&<p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>{gpsText}</p>}
-          {distance!==null && (
+          {isLoadingOrs && <p style={{fontSize:".75rem",color:"var(--gold)"}}>⏳ Menghitung jarak dengan ORS…</p>}
+          {distance!==null && !isLoadingOrs && (
             <p style={{fontSize:".75rem",color:"var(--gold)",marginTop:4}}>
               📏 Jarak ke toko: <strong>{distance.toFixed(1)} km</strong>
+              {distanceMethod==="ors" && <span style={{fontSize:".65rem",marginLeft:6,color:"var(--green)"}}>✅ ORS</span>}
+              {distanceMethod==="haversine" && <span style={{fontSize:".65rem",marginLeft:6,color:"var(--text3)"}}>⚠️ estimasi</span>}
             </p>
           )}
         </div>
@@ -471,13 +526,13 @@ function OrderModal({p}) {
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
 
         <div className="fg">
-          <label>🚚 Pilih Jenis Pengiriman</label>
+          <label>🚚 Pilih Kurir</label>
           <select className="finput courier-select" value={courierType}
             onChange={e=>setCourierType(e.target.value)}>
-            <option value="jne">📦 JNE / SiCepat — Ongkir otomatis</option>
+            <option value="jne">📦 JNE — Ongkir otomatis</option>
             {MANUAL_COURIERS.map(k=>(
               <option key={k} value={k}>
-                {k==="gosend"?"🛵":k==="grab"?"🟢":k==="maxim"?"🟡":k==="indriver"?"🔵":k==="lalamove"?"🚚":"🏪"} {COURIER_LABEL[k]}
+                {k==="jnt"?"📮":k==="sicepat"?"📬":k==="gosend"?"🛵":k==="grab"?"🟢":k==="lalamove"?"🚚":k==="pos"?"📫":"🏪"} {COURIER_LABEL[k]}
                 {typeof manualRates[k]==="number" ? ` — ${fRp(manualRates[k])}` : distance && ratePerKm>0 ? ` — ${fRp(distance*ratePerKm)} (per km)` : " — Diatur admin"}
               </option>
             ))}
@@ -541,6 +596,7 @@ function OrderModal({p}) {
               <div className="ship-manual-note ready">
                 <p>📏 Jarak <strong>{distance.toFixed(1)} km</strong> × Rp{ratePerKm}/km</p>
                 <p className="ship-manual-price">{fRp(distance * ratePerKm)}</p>
+                {distanceMethod==="ors" && <span style={{fontSize:".7rem",color:"var(--green)"}}>✅ dihitung dengan ORS</span>}
               </div>
             ) : (
               <div className="ship-manual-note">
@@ -559,7 +615,10 @@ function OrderModal({p}) {
         <div className="ord-total-box">
           <div className="ord-total-row"><span>Harga produk</span><span>{fRp(p.price)}</span></div>
           {distance!==null && courierType!=="jne" && (
-            <div className="ord-total-row"><span>Jarak (km)</span><span>{distance.toFixed(1)}</span></div>
+            <div className="ord-total-row">
+              <span>Jarak (km)</span>
+              <span>{distance.toFixed(1)} {distanceMethod==="ors" && <span className="ors-badge">ORS</span>}</span>
+            </div>
           )}
           <div className="ord-total-row">
             <span>Ongkos kirim</span>
@@ -844,20 +903,22 @@ function UserChatPanel() {
   );
 }
 
-// ─── ADMIN: Atur Tarif Pengiriman ──────────────────────────────────────
+// ─── ADMIN: Atur Tarif Pengiriman (dengan ORS API Key) ─────────────────
 function ShippingRatesAdmin({onClose}) {
   const COURIERS = [
-    {key:"gosend",     label:"GoSend (Gojek)", icon:"🛵"},
-    {key:"grab",       label:"Grab Express",   icon:"🟢"},
-    {key:"maxim",      label:"Maxim",          icon:"🟡"},
-    {key:"indriver",   label:"InDriver",       icon:"🔵"},
-    {key:"lalamove",   label:"Lalamove",       icon:"🚚"},
+    {key:"jnt",      label:"JNT",               icon:"📮"},
+    {key:"sicepat",  label:"SiCepat",           icon:"📬"},
+    {key:"gosend",   label:"GoSend (Gojek)",    icon:"🛵"},
+    {key:"grab",     label:"Grab Express",      icon:"🟢"},
+    {key:"lalamove", label:"Lalamove",          icon:"🚚"},
+    {key:"pos",      label:"Kantor Pos (POS)",  icon:"📫"},
     {key:"kurir_toko", label:"Kurir Toko Sendiri", icon:"🏪"},
   ];
   const [rates,      setRates]      = useState({});
   const [ratePerKm,  setRatePerKm]  = useState(0);
   const [adminLat,   setAdminLat]   = useState("");
   const [adminLng,   setAdminLng]   = useState("");
+  const [orsApiKey,  setOrsApiKey]  = useState("");
   const [loading,    setLoading]    = useState(true);
   const [saving,     setSaving]     = useState(false);
   const [saved,      setSaved]      = useState(false);
@@ -872,6 +933,7 @@ function ShippingRatesAdmin({onClose}) {
           setAdminLat(data.adminLocation.lat?.toString()||"");
           setAdminLng(data.adminLocation.lng?.toString()||"");
         }
+        setOrsApiKey(data.orsApiKey||"");
       }
       setLoading(false);
     }, ()=>setLoading(false));
@@ -897,6 +959,7 @@ function ShippingRatesAdmin({onClose}) {
           lat: parseFloat(adminLat) || 0,
           lng: parseFloat(adminLng) || 0
         },
+        orsApiKey: orsApiKey.trim(),
         updatedAt: serverTimestamp(),
       }).catch(async ()=>{
         const { setDoc } = await import("firebase/firestore");
@@ -907,6 +970,7 @@ function ShippingRatesAdmin({onClose}) {
             lat: parseFloat(adminLat) || 0,
             lng: parseFloat(adminLng) || 0
           },
+          orsApiKey: orsApiKey.trim(),
           updatedAt: serverTimestamp()
         });
       });
@@ -918,9 +982,9 @@ function ShippingRatesAdmin({onClose}) {
 
   return (
     <div className="acp">
-      <h3 className="acp-ttl">🚚 Atur Tarif Pengiriman</h3>
+      <h3 className="acp-ttl">🚚 Atur Tarif & Metode Perhitungan</h3>
       <p className="ship-admin-desc">
-        Tarif flat untuk ekspedisi tertentu, atau gunakan tarif per km (otomatis hitung jarak dengan GPS buyer).
+        Tarif flat untuk ekspedisi tertentu, atau gunakan tarif per km + jarak akurat dengan OpenRouteService (ORS).
       </p>
       {loading ? (
         <p className="chat-empty">Memuat tarif…</p>
@@ -949,6 +1013,19 @@ function ShippingRatesAdmin({onClose}) {
               </p>
             </div>
           </div>
+
+          <div className="ship-rate-row" style={{marginBottom:12}}>
+            <span className="ship-rate-label">🔑 ORS API Key <Ic.Ors/></span>
+            <div style={{flex:1}}>
+              <input type="password" className="finput" placeholder="Masukkan API Key OpenRouteService"
+                value={orsApiKey} onChange={e=>{setOrsApiKey(e.target.value); setSaved(false);}}/>
+              <p style={{fontSize:".7rem",color:"var(--text3)",marginTop:4}}>
+                Dapatkan gratis di <a href="https://openrouteservice.org/" target="_blank" rel="noopener noreferrer" style={{color:"var(--gold)"}}>openrouteservice.org</a>.
+                Kosongkan untuk menggunakan estimasi garis lurus (haversine).
+              </p>
+            </div>
+          </div>
+
           <p style={{fontSize:".7rem",color:"var(--text3)",marginBottom:12}}>
             Koordinat toko digunakan untuk menghitung jarak ke buyer. Dapatkan dari Google Maps (klik kanan → koordinat).
           </p>
@@ -971,7 +1048,7 @@ function ShippingRatesAdmin({onClose}) {
       <div className="form-acts" style={{marginTop:16}}>
         <button type="button" className="btn-cancel" onClick={onClose}>Tutup</button>
         <button type="button" className="btn-save" onClick={handleSave} disabled={saving}>
-          {saving?"Menyimpan…":saved?"✅ Tersimpan!":"Simpan Tarif"}
+          {saving?"Menyimpan…":saved?"✅ Tersimpan!":"Simpan Tarif & ORS"}
         </button>
       </div>
     </div>
@@ -1148,7 +1225,7 @@ function AdminChatPanel({onLogout}) {
             {selOrd.courierLabel&&(
               <p>🚚 Kurir: <strong>{selOrd.courierLabel}</strong>
                 {selOrd.courierType==="jne" && selOrd.shippingCost>0 && ` · Ongkir: ${fRp(selOrd.shippingCost)}`}
-                {selOrd.distance && ` · Jarak ${selOrd.distance.toFixed(1)} km`}
+                {selOrd.distance && ` · Jarak ${selOrd.distance.toFixed(1)} km (${selOrd.distanceMethod||"estimasi"})`}
               </p>
             )}
             {selOrd.shippingPending&&(
@@ -1483,7 +1560,7 @@ export default function App() {
                           <Ic.Chat/> Pesanan {notifCnt>0&&<span className="dd-badge">{notifCnt}</span>}
                         </button>
                         <button type="button" className="dd-item" onClick={()=>{setShowShipRates(true);closeMenu();}}>
-                          🚚 Atur Tarif Kirim
+                          🚚 Atur Tarif Kirim & ORS
                         </button>
                         <div className="dd-info">
                           <span>📦 {products.length} produk</span>
@@ -1735,6 +1812,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .ord-total-row{display:flex;justify-content:space-between;font-size:.82rem;color:var(--text2)}
 .ord-total-row.total{padding-top:8px;border-top:1px solid var(--border);font-weight:700;font-size:.95rem;color:var(--text)}
 .ord-total-row.total span:last-child{color:var(--gold)}
+.ors-badge{background:#4caf8230;color:var(--green);font-size:.6rem;padding:1px 6px;border-radius:4px;margin-left:4px}
 .qris-head{display:flex;align-items:center;gap:8px;padding:16px 16px 0;font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .qris-body{padding:16px;text-align:center}
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
