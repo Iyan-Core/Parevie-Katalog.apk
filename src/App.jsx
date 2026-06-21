@@ -182,7 +182,7 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── Daftar kurir ──
+  // ─── Daftar kurir (hanya yang tersedia secara nasional) ──
   const RAJAONGKIR_COURIERS = [
     { key: "jne", label: "JNE" },
     { key: "tiki", label: "TIKI" },
@@ -190,35 +190,11 @@ function OrderModal({p}) {
     { key: "jnt", label: "J&T Express" },
     { key: "sicepat", label: "SiCepat" },
     { key: "wahana", label: "Wahana" },
-    { key: "ide", label: "ID Express" },
     { key: "ninja", label: "Ninja Xpress" },
     { key: "lion", label: "Lion Parcel" },
-    { key: "ncs", label: "NCS" },
-    { key: "pcp", label: "PCP" },
-    { key: "rex", label: "Royal Express" },
-    { key: "sentral", label: "Sentral Cargo" },
-    { key: "sap", label: "SAP Express" },
-    { key: "pandu", label: "Pandu" },
-    { key: "pahala", label: "Pahala" },
-    { key: "first", label: "First Logistics" },
-    { key: "nss", label: "NSS Express" },
-    { key: "idl", label: "IDL Cargo" },
-    { key: "pop", label: "PopExpress" },
-    { key: "rcl", label: "Red Carpet" },
-    { key: "exaq", label: "Exaq Logistics" },
-    { key: "dakota", label: "Dakota Cargo" },
-    { key: "zona", label: "Zona Express" },
-    { key: "alfatrex", label: "Alfatrex" },
     { key: "anteraja", label: "AnterAja" },
-    { key: "kerry", label: "Kerry Express" },
-    { key: "lge", label: "Logika Express" },
-    { key: "siap", label: "SiAP Express" },
-    { key: "trawlens", label: "Trawlbens" },
-    { key: "jtl", label: "Jagad Total Logistic" },
-    { key: "mas", label: "Merpati Alam Semesta" },
-    { key: "zataka", label: "Zataka" },
-    { key: "mpx", label: "MPXGO" },
-    { key: "batt", label: "Batt Cargo" }
+    { key: "ide", label: "ID Express" }
+    // SAP Express dihapus
   ];
   const MANUAL_COURIERS = [
     { key: "gosend", label: "GoSend (Gojek)" },
@@ -385,8 +361,8 @@ function OrderModal({p}) {
         body: JSON.stringify({
           origin: ORIGIN_CITY_ID,
           destination: city.city_id,
-          weight: 200, // berat default (gram) — bisa disesuaikan per produk nanti
-          courier: courierType, // kirim kurir yang dipilih
+          weight: 200,
+          courier: courierType,
         }),
       });
       const data = await r.json();
@@ -408,7 +384,6 @@ function OrderModal({p}) {
       if (isRajaOngkir) {
         finalShippingCost = shipSelected?.cost || 0;
       } else {
-        // manual courier
         const flat = manualRates[courierType];
         if (typeof flat === "number" && flat >= 0) {
           finalShippingCost = flat;
