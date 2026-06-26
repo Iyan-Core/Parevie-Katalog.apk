@@ -38,10 +38,13 @@ jobs:
           VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
           VITE_ADMIN_PASSWORD: ${{ secrets.VITE_ADMIN_PASSWORD }}
           RAJAONGKIR_API_KEY: ${{ secrets.RAJAONGKIR_API_KEY }}
+          VITE_FN_SEARCH_CITY_URL: ${{ secrets.VITE_FN_SEARCH_CITY_URL }}
+          VITE_FN_SHIP_COST_URL: ${{ secrets.VITE_FN_SHIP_COST_URL }}
+          VITE_ORIGIN_CITY_ID: ${{ secrets.VITE_ORIGIN_CITY_ID }}
 
       - name: 📱 Install Capacitor
         run: |
-          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5
+          npm install @capacitor/core@5 @capacitor/cli@5 @capacitor/android@5 @capacitor/geolocation@5
 
       - name: 📝 Create capacitor.config.json
         run: |
@@ -66,13 +69,13 @@ jobs:
       - name: 📂 Sync Capacitor → Android
         run: npx cap sync android
 
-      - name: 📝 Add location permissions to AndroidManifest.xml
+      - name: 📝 Add required permissions to AndroidManifest.xml
         run: |
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
             if ! grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
-              sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />' "$MANIFEST"
-              echo "✅ Izin lokasi ditambahkan"
+              sed -i '/<manifest/a\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />\n    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />' "$MANIFEST"
+              echo "✅ Izin lokasi, kamera, dan storage ditambahkan"
             else
               echo "✅ Izin lokasi sudah ada"
             fi
@@ -85,6 +88,10 @@ jobs:
               package="com.katalogpro.app">
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.CAMERA" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
               <application
                   android:allowBackup="true"
                   android:icon="@mipmap/ic_launcher"
