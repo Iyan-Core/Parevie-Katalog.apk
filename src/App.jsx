@@ -4,7 +4,7 @@ import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc,
   doc, onSnapshot, serverTimestamp, query, orderBy, where, getDoc
 } from "firebase/firestore";
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
 
 const firebaseConfig = {
@@ -167,102 +167,6 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ── Jenis pengiriman: jne (otomatis RajaOngkir) atau manual (gosend/grab/dll, admin atur tarif) ──
-  const [courierType, setCourierType] = useState("jne");
-  const [manualRates, setManualRates] = useState({}); // {gosend: 12000, grab: 15000, ...}
-  const [loadingRates, setLoadingRates] = useState(true);
-
-  // Ambil tarif manual yang sudah diset admin (realtime)
-  useEffect(()=>{
-    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
-      setManualRates(snap.exists() ? (snap.data().rates||{}) : {});
-      setLoadingRates(false);
-    }, ()=>setLoadingRates(false));
-    return ()=>unsub();
-  },[]);
-
-  // ── Shipping cost (RajaOngkir via Cloud Function proxy) ──
-  const [destKeyword, setDestKeyword]   = useState("");
-  const [destOptions, setDestOptions]   = useState([]);
-  const [destCity,    setDestCity]      = useState(null); // {city_id, city_name}
-  const [searchingCity, setSearchingCity] = useState(false);
-  const [shipOptions, setShipOptions]   = useState([]);
-  const [shipSelected,setShipSelected]  = useState(null);
-  const [loadingShip, setLoadingShip]   = useState(false);
-  const [shipError,   setShipError]     = useState("");
-
-  // Ganti dengan URL Cloud Function kamu setelah deploy
-  const FN_SEARCH_CITY = import.meta.env.VITE_FN_SEARCH_CITY_URL || "";
-  const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
-  const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || ""; // kota asal toko
-
-  const searchCity = async (kw) => {
-    setDestKeyword(kw);
-    setDestCity(null);
-    setShipOptions([]);
-    setShipSelected(null);
-    if (kw.trim().length < 3 || !FN_SEARCH_CITY) { setDestOptions([]); return; }
-    setSearchingCity(true);
-    try {
-      const r = await fetch(`${FN_SEARCH_CITY}?keyword=${encodeURIComponent(kw)}`);
-      const data = await r.json();
-      setDestOptions(data.cities || []);
-    } catch { setDestOptions([]); }
-    setSearchingCity(false);
-  };
-
-  const pickCity = async (city) => {
-    setDestCity(city);
-    setDestKeyword(city.city_name);
-    setDestOptions([]);
-    if (!ORIGIN_CITY_ID || !FN_SHIP_COST) {
-      setShipError("Konfigurasi ongkir belum lengkap. Hubungi admin.");
-      return;
-    }
-    setLoadingShip(true); setShipError("");
-    try {
-      const r = await fetch(FN_SHIP_COST, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          origin: ORIGIN_CITY_ID,
-          destination: city.city_id,
-          weight: 200, // gram — sesuaikan dengan berat produk
-          courier: "jne",
-        }),
-      });
-      const data = await r.json();
-      if (data.error) setShipError(data.error);
-      else setShipOptions(data.options || []);
-    } catch { setShipError("Gagal menghitung ongkir. Coba lagi."); }
-    setLoadingShip(false);
-  };
-
-  // Ongkir: JNE dari RajaOngkir (otomatis), lainnya pakai tarif manual admin (jika sudah diset)
-  const manualCost = manualRates[courierType];
-  const hasManualRate = typeof manualCost === "number" && manualCost >= 0;
-  const shippingCost = courierType==="jne"
-    ? (shipSelected?.cost||0)
-    : (hasManualRate ? manualCost : 0);
-  const totalWithShipping = p.price + shippingCost;
-
-  const switchCourierType = (type) => {
-    setCourierType(type);
-    if (type !== "jne") setShipSelected(null);
-  };
-
-  const COURIER_LABEL = {
-    jne:    "JNE / SiCepat (Reguler)",
-    gosend: "GoSend (Gojek)",
-    grab:   "Grab Express",
-    maxim:  "Maxim",
-    indriver: "InDriver",
-    lalamove: "Lalamove",
-    kurir_toko: "Kurir Toko Sendiri",
-  };
-  // Kurir manual = semua kecuali jne
-  const MANUAL_COURIERS = Object.keys(COURIER_LABEL).filter(k=>k!=="jne");
-
   const getLocation = () => {
     if (!navigator.geolocation) { setLocState("error"); setGpsText("GPS tidak tersedia."); return; }
     setLocState("loading"); setGpsText("Mengambil lokasi GPS…");
@@ -299,18 +203,9 @@ function OrderModal({p}) {
         productId:p.id, productName:p.name, productImg:getImg(p),
         price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
         address:addr.trim(), note:note.trim(), status:"pending",
-        courierType: courierType,
-        courierLabel: COURIER_LABEL[courierType],
-        shippingCity: destCity?.city_name || "",
-        shippingCourier: shipSelected?.courier || "",
-        shippingService: shipSelected?.service || "",
-        shippingCost: shippingCost,
-        shippingPending: courierType!=="jne" && !hasManualRate, // true hanya jika tarif manual belum diset admin
-        totalAmount: totalWithShipping,
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
-      // Simpan ke localStorage
       const existing = lsGet();
       if (!existing.find(o=>o.orderId===oRef.id)) {
         lsSet([{orderId:oRef.id, productName:p.name, productImg:getImg(p),
@@ -319,22 +214,14 @@ function OrderModal({p}) {
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
         message:`🛒 Pesanan baru: ${p.name}`,
-        detail:`Dari: ${name.trim()} (${phone.trim()})${(courierType!=="jne"&&!hasManualRate)?` · 🚨 Perlu set tarif ${COURIER_LABEL[courierType]}`:""}`,
+        detail:`Dari: ${name.trim()} (${phone.trim()})`,
         address:addr.trim(), read:false, createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${COURIER_LABEL[courierType]}${shippingCost>0?` (${fRp(shippingCost)})`:""}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}`,
         createdAt:serverTimestamp(),
       });
-      // Jika kurir manual & tarif belum diset admin, kirim pengingat khusus
-      if (courierType !== "jne" && !hasManualRate) {
-        await addDoc(collection(db,`orders/${oRef.id}/chats`),{
-          from:"system",
-          text:`📍 Mohon admin set tarif ${COURIER_LABEL[courierType]} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
-          createdAt:serverTimestamp(),
-        });
-      }
       setStep("qris");
     } catch(e){ alert("Gagal membuat pesanan: "+e.message); }
     setSub(false);
@@ -355,7 +242,6 @@ function OrderModal({p}) {
         message:`💰 Pembayaran: ${p.name} — ${fRp(p.price)}`,
         read:false, createdAt:serverTimestamp(),
       });
-      // Update status di localStorage juga
       const arr = lsGet().map(o=>o.orderId===orderId?{...o,status:"paid_pending_confirm"}:o);
       lsSet(arr);
       setStep("chat");
@@ -407,112 +293,10 @@ function OrderModal({p}) {
         </div>
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
-
-        {/* ── Pilih Jenis Pengiriman — dropdown ── */}
-        <div className="fg">
-          <label>🚚 Pilih Jenis Pengiriman</label>
-          <select className="finput courier-select" value={courierType}
-            onChange={e=>switchCourierType(e.target.value)}>
-            <option value="jne">📦 JNE / SiCepat — Ongkir otomatis</option>
-            {MANUAL_COURIERS.map(k=>(
-              <option key={k} value={k}>
-                {k==="gosend"?"🛵":k==="grab"?"🟢":k==="maxim"?"🟡":k==="indriver"?"🔵":k==="lalamove"?"🚚":"🏪"} {COURIER_LABEL[k]}
-                {typeof manualRates[k]==="number" ? ` — ${fRp(manualRates[k])}` : " — Diatur admin"}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* ── Ongkos Kirim JNE (otomatis via RajaOngkir) ── */}
-        {courierType==="jne" && (
-          <div className="fg ship-section">
-            <label>Hitung Ongkos Kirim JNE</label>
-            <div className="ship-city-search">
-              <input className="finput" value={destKeyword}
-                onChange={e=>searchCity(e.target.value)}
-                placeholder="Cari kota tujuan… (min. 3 huruf)"/>
-              {searchingCity && <span className="ship-loading-dot">⏳</span>}
-            </div>
-            {destOptions.length>0 && (
-              <div className="ship-city-list">
-                {destOptions.map(c=>(
-                  <button key={c.city_id} type="button" className="ship-city-item"
-                    onClick={()=>pickCity(c)}>
-                    {c.city_name}, {c.province}
-                  </button>
-                ))}
-              </div>
-            )}
-            {!FN_SEARCH_CITY && (
-              <p className="ship-msg err">
-                ⚠️ Fitur ongkir JNE belum aktif. Admin perlu deploy Cloud Function & isi URL di pengaturan.
-              </p>
-            )}
-            {loadingShip && <p className="ship-msg">⏳ Menghitung ongkos kirim…</p>}
-            {shipError && <p className="ship-msg err">{shipError}</p>}
-            {shipOptions.length>0 && (
-              <div className="ship-options">
-                {shipOptions.map((o,i)=>(
-                  <button key={i} type="button"
-                    className={`ship-option${shipSelected===o?" on":""}`}
-                    onClick={()=>setShipSelected(o)}>
-                    <div>
-                      <strong>{o.courier} {o.service}</strong>
-                      <p>{o.description} · Estimasi {o.etd} hari</p>
-                    </div>
-                    <span>{fRp(o.cost)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Kurir manual: tampilkan tarif jika admin sudah set, atau info menunggu ── */}
-        {courierType!=="jne" && (
-          <div className="fg">
-            {loadingRates ? (
-              <p className="ship-msg">⏳ Memuat tarif…</p>
-            ) : hasManualRate ? (
-              <div className="ship-manual-note ready">
-                <p>✅ Ongkir <strong>{COURIER_LABEL[courierType]}</strong> sudah ditentukan:</p>
-                <p className="ship-manual-price">{fRp(manualCost)}</p>
-              </div>
-            ) : (
-              <div className="ship-manual-note">
-                <p>Kamu memilih <strong>{COURIER_LABEL[courierType]}</strong>.</p>
-                <p>Ongkos kirim belum diset admin untuk ekspedisi ini. Admin akan menghitung & menginfokan ongkir lewat chat setelah pesanan dibuat.</p>
-              </div>
-            )}
-          </div>
-        )}
-
-
         <div className="ord-info">
           <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
         </div>
-
-        {/* ── Ringkasan Total ── */}
-        <div className="ord-total-box">
-          <div className="ord-total-row"><span>Harga produk</span><span>{fRp(p.price)}</span></div>
-          <div className="ord-total-row">
-            <span>Ongkos kirim</span>
-            <span>
-              {courierType==="jne"
-                ? (shippingCost>0?fRp(shippingCost):"—")
-                : "Diinfokan admin"}
-            </span>
-          </div>
-          <div className="ord-total-row total">
-            <span>Total{courierType!=="jne"&&"*"}</span>
-            <span>{fRp(totalWithShipping)}</span>
-          </div>
-          {courierType!=="jne" && (
-            <p className="ord-total-note">*Belum termasuk ongkir {COURIER_LABEL[courierType]}</p>
-          )}
-        </div>
-
         <button type="button" className="btn-order" onClick={submitOrder} disabled={submitting}>
           {submitting?"⏳ Mengirim…":"📦 Buat Pesanan"}
         </button>
@@ -582,103 +366,105 @@ function UserChatPanel() {
   const [confirming, setConfirming] = useState(false);
   const chatRef = useRef(null);
 
-  // Sync localStorage → state setiap buka panel
-  useEffect(()=>{ setMyOrders(lsGet()); },[]);
+  useEffect(() => { setMyOrders(lsGet()); }, []);
 
-  // Listen status semua pesanan di LIST (bukan yang sedang dibuka detailnya)
-  // agar tidak race dengan listener detail di bawah
-  useEffect(()=>{
-    const orders = lsGet();
-    if (orders.length===0) return;
-    const unsubs = orders
-      .filter(order=>order.orderId!==selOrd) // skip yang sedang dibuka — dihandle listener detail
-      .map(order=>{
-        return onSnapshot(doc(db,"orders",order.orderId), snap=>{
-          if (snap.exists()) {
-            const newStatus = snap.data().status;
-            const newBC     = snap.data().buyerConfirmed || false;
-            const arr = lsGet().map(o=>
-              o.orderId===order.orderId ? {...o, status:newStatus, buyerConfirmed:newBC} : o
-            );
-            lsSet(arr);
-            setMyOrders(arr);
-          } else {
-            const arr = lsGet().filter(o=>o.orderId!==order.orderId);
-            lsSet(arr); setMyOrders(arr);
+  useEffect(() => {
+    if (myOrders.length === 0) return;
+    const unsubs = myOrders.map(order => {
+      return onSnapshot(doc(db, "orders", order.orderId), snap => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const newStatus = data.status || "pending";
+          const newBC = data.buyerConfirmed || false;
+          const arr = lsGet().map(o =>
+            o.orderId === order.orderId ? { ...o, status: newStatus, buyerConfirmed: newBC } : o
+          );
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd === order.orderId) {
+            setOrdData(prev => ({ ...prev, ...data, status: newStatus, buyerConfirmed: newBC }));
           }
-        });
+        } else {
+          const arr = lsGet().filter(o => o.orderId !== order.orderId);
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd === order.orderId) setSelOrd(null);
+        }
       });
-    return ()=>unsubs.forEach(u=>u());
-  },[selOrd]);
-
-  // Listen chat + order saat detail dibuka — SATU-SATUNYA sumber kebenaran untuk order yang aktif
-  useEffect(()=>{
-    if (!selOrd) return;
-    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
-    const u1=onSnapshot(q,snap=>{
-      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
-    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myOrders.map(o => o.orderId).join(","), selOrd]);
+
+  useEffect(() => {
+    if (!selOrd) return;
+    const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
+    const u1 = onSnapshot(q, snap => {
+      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
+    });
+    const u2 = onSnapshot(doc(db, "orders", selOrd), snap => {
       if (snap.exists()) {
         const data = snap.data();
-        setOrdData(data);
-        // Sync ke localStorage juga supaya list pesanan ikut update
-        const arr = lsGet().map(o=>
-          o.orderId===selOrd ? {...o, status:data.status, buyerConfirmed:data.buyerConfirmed||false} : o
+        setOrdData({ id: snap.id, ...data });
+        const arr = lsGet().map(o =>
+          o.orderId === selOrd ? { ...o, status: data.status, buyerConfirmed: data.buyerConfirmed || false } : o
         );
         lsSet(arr);
-        setMyOrders(arr);
+        setMyOrders([...arr]);
       } else {
         setSelOrd(null);
       }
     });
-    return ()=>{ u1(); u2(); };
-  },[selOrd]);
+    return () => { u1(); u2(); };
+  }, [selOrd]);
 
   const sendChat = async () => {
-    if (!txt.trim()||!selOrd) return;
+    if (!txt.trim() || !selOrd) return;
     try {
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
+      await addDoc(collection(db, `orders/${selOrd}/chats`), {
+        from: "buyer", text: txt.trim(), createdAt: serverTimestamp(),
       });
       setTxt("");
-    } catch(e){ alert("Gagal: "+e.message); }
+    } catch (e) { alert("Gagal: " + e.message); }
   };
 
-  // ── Konfirmasi terima pesanan ──
-  // Firestore adalah satu-satunya sumber kebenaran.
-  // Listener detail (u2 di atas) akan otomatis update ordData + localStorage
-  // begitu write ini berhasil — tidak perlu set manual di sini (hindari race).
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
-      await updateDoc(doc(db,"orders",selOrd),{
+      await updateDoc(doc(db, "orders", selOrd), {
+        status: "done",
         buyerConfirmed: true,
         buyerConfirmedAt: serverTimestamp(),
       });
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"system",
-        text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
-        createdAt:serverTimestamp(),
+      await addDoc(collection(db, `orders/${selOrd}/chats`), {
+        from: "system",
+        text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
+        createdAt: serverTimestamp(),
       });
-    } catch(e){ alert("Gagal konfirmasi: "+e.message); }
+      const arr = lsGet().map(o =>
+        o.orderId === selOrd ? { ...o, status: "done", buyerConfirmed: true } : o
+      );
+      lsSet(arr);
+      setMyOrders([...arr]);
+      setOrdData(prev => ({ ...prev, status: "done", buyerConfirmed: true }));
+      alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
+    } catch (e) { alert("Gagal konfirmasi: " + e.message); }
     setConfirming(false);
   };
 
-  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
-    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
-  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
-    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
+  const SL = { pending: "⏳ Menunggu konfirmasi", paid_pending_confirm: "💰 Pembayaran diverifikasi",
+    confirmed: "✅ Dikonfirmasi", shipped: "🚚 Dalam pengiriman", done: "🎉 Selesai", cancelled: "❌ Dibatalkan" };
+  const SC = { pending: "#c9a84c", paid_pending_confirm: "#7c6af5", confirmed: "#4caf82",
+    shipped: "#29b6f6", done: "#4caf82", cancelled: "#e05a5a" };
+  const WA_ADMIN = "6281328046768";
 
-  const WA_ADMIN = "6281328046768"; // ganti nomor WA admin
-
-  if (myOrders.length===0) return (
+  if (myOrders.length === 0) return (
     <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-      <div className="empty" style={{padding:"40px 16px"}}>
-        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
+      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
+      <div className="empty" style={{ padding: "40px 16px" }}>
+        <p style={{ fontSize: "2rem" }}>🛒</p><h3>Belum ada pesanan</h3>
         <p>Pesanan akan muncul setelah checkout</p>
       </div>
     </div>
@@ -686,23 +472,23 @@ function UserChatPanel() {
 
   if (!selOrd) return (
     <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
       <div className="acp-list">
-        {myOrders.map(o=>{
-          const status = o.status||"pending";
+        {myOrders.map(o => {
+          const status = o.status || "pending";
           return (
-            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
-              <img src={o.productImg||IMG_PH} alt={o.productName}
-                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
-                onError={e=>{e.target.src=IMG_PH;}}/>
-              <div style={{flex:1,minWidth:0}}>
+            <div key={o.orderId} className="acp-item" onClick={() => setSelOrd(o.orderId)}>
+              <img src={o.productImg || IMG_PH} alt={o.productName}
+                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+                onError={e => { e.target.src = IMG_PH; }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="acp-pname">{o.productName}</p>
                 <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
-                <span style={{fontSize:".7rem",fontWeight:600,color:SC[status]||"#888"}}>
-                  {SL[status]||status}
+                <span style={{ fontSize: ".7rem", fontWeight: 600, color: SC[status] || "#888" }}>
+                  {SL[status] || status}
                 </span>
               </div>
-              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
+              <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>Chat →</span>
             </div>
           );
         })}
@@ -710,41 +496,37 @@ function UserChatPanel() {
     </div>
   );
 
-  const status      = ordData?.status||"pending";
-  // Cek buyerConfirmed dari ordData (Firestore) ATAU localStorage
-  const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
-  const buyerConfirmed = ordData?.buyerConfirmed || lsOrder?.buyerConfirmed || false;
-  const found       = lsOrder;
+  const status = ordData?.status || "pending";
+  const buyerConfirmed = ordData?.buyerConfirmed || false;
 
   return (
     <div className="chat-wrap">
       <div className="chat-hdr">
-        <button type="button" onClick={()=>setSelOrd(null)} className="btn-back-chat">←</button>
-        <Ic.Chat/> <span>{found?.productName}</span>
+        <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
+        <Ic.Chat /> <span>{ordData?.productName || "Pesanan"}</span>
       </div>
       <div className="status-bar" style={{
-        background:SC[status]+"22",borderColor:SC[status]+"55",color:SC[status]}}>
-        {SL[status]||status}
+        background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status]
+      }}>
+        {SL[status] || status}
       </div>
 
-      {/* ── Tombol konfirmasi terima pesanan ── */}
-      {status==="done" && !buyerConfirmed && (
+      {status === "shipped" && !buyerConfirmed && (
         <div className="buyer-confirm-box">
           <button
             className="btn-buyer-confirm"
             onClick={handleBuyerConfirm}
             disabled={confirming}>
-            {confirming?"⏳ Mengonfirmasi…":"✅ Saya Sudah Menerima Pesanan"}
+            {confirming ? "⏳ Mengonfirmasi…" : "✅ Saya Sudah Menerima Pesanan"}
           </button>
         </div>
       )}
 
-      {/* ── Tampilan setelah konfirmasi — PERMANEN ── */}
-      {status==="done" && buyerConfirmed && (
+      {status === "done" && buyerConfirmed && (
         <div className="buyer-thankyou-box">
           <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
           <p className="buyer-thankyou-sub">
-            Pesanan kamu sudah kami tandai selesai.<br/>
+            Pesanan kamu sudah kami tandai selesai.<br />
             Semoga puas dengan produk Parevie 💛
           </p>
           <a
@@ -752,110 +534,26 @@ function UserChatPanel() {
             target="_blank"
             rel="noopener noreferrer"
             className="btn-wa-help">
-            <Ic.WA/> Butuh Bantuan? Hubungi Kami
+            <Ic.WA /> Butuh Bantuan? Hubungi Kami
           </a>
         </div>
       )}
 
       <div className="chat-msgs" ref={chatRef}>
-        {msgs.map(m=>(
-          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
-            {m.from==="system"
-              ?<div className="csys">{m.text}</div>
-              :<><div className={`cbubble ${m.from==="buyer"?"bubble-buyer":"bubble-admin"}`}>{m.text}</div>
-                <span className="ctime">{m.from==="buyer"?"Saya":"👤 Admin"}</span></>}
+        {msgs.map(m => (
+          <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
+            {m.from === "system"
+              ? <div className="csys">{m.text}</div>
+              : <><div className={`cbubble ${m.from === "buyer" ? "bubble-buyer" : "bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from === "buyer" ? "Saya" : "👤 Admin"}</span></>}
           </div>
         ))}
       </div>
       <div className="chat-inp-row">
-        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
-          value={txt} onChange={e=>setTxt(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
-        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
-      </div>
-    </div>
-  );
-}
-
-// ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
-// ─── ADMIN: Atur Tarif Pengiriman Manual (GoSend, Grab, dll) ──────────────
-function ShippingRatesAdmin({onClose}) {
-  const COURIERS = [
-    {key:"gosend",     label:"GoSend (Gojek)", icon:"🛵"},
-    {key:"grab",       label:"Grab Express",   icon:"🟢"},
-    {key:"maxim",      label:"Maxim",          icon:"🟡"},
-    {key:"indriver",   label:"InDriver",       icon:"🔵"},
-    {key:"lalamove",   label:"Lalamove",       icon:"🚚"},
-    {key:"kurir_toko", label:"Kurir Toko Sendiri", icon:"🏪"},
-  ];
-  const [rates,   setRates]   = useState({});
-  const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [saved,   setSaved]   = useState(false);
-
-  useEffect(()=>{
-    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
-      setRates(snap.exists() ? (snap.data().rates||{}) : {});
-      setLoading(false);
-    }, ()=>setLoading(false));
-    return ()=>unsub();
-  },[]);
-
-  const updateRate = (key, value) => {
-    setRates(prev=>({...prev, [key]: value===""?undefined:Number(value)}));
-    setSaved(false);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      // Buang field undefined sebelum simpan
-      const clean = {};
-      Object.entries(rates).forEach(([k,v])=>{
-        if (typeof v==="number" && !isNaN(v)) clean[k]=v;
-      });
-      await updateDoc(doc(db,"settings","shippingRates"),{
-        rates: clean, updatedAt: serverTimestamp(),
-      }).catch(async ()=>{
-        // Jika dokumen belum ada, buat dengan addDoc-style set
-        const { setDoc } = await import("firebase/firestore");
-        await setDoc(doc(db,"settings","shippingRates"),{rates:clean, updatedAt:serverTimestamp()});
-      });
-      setSaved(true);
-      setTimeout(()=>setSaved(false),2500);
-    } catch(e){ alert("Gagal menyimpan tarif: "+e.message); }
-    setSaving(false);
-  };
-
-  return (
-    <div className="acp">
-      <h3 className="acp-ttl">🚚 Atur Tarif Pengiriman Manual</h3>
-      <p className="ship-admin-desc">
-        Tarif ini berlaku untuk semua pesanan dengan ekspedisi terkait. Buyer akan langsung melihat harga ini di form pemesanan. Kosongkan jika belum ditentukan.
-      </p>
-      {loading ? (
-        <p className="chat-empty">Memuat tarif…</p>
-      ) : (
-        <div className="ship-rates-list">
-          {COURIERS.map(c=>(
-            <div key={c.key} className="ship-rate-row">
-              <span className="ship-rate-label">{c.icon} {c.label}</span>
-              <div className="ship-rate-input-wrap">
-                <span>Rp</span>
-                <input type="number" className="finput ship-rate-input"
-                  placeholder="0"
-                  value={rates[c.key]??""}
-                  onChange={e=>updateRate(c.key, e.target.value)}/>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="form-acts" style={{marginTop:16}}>
-        <button type="button" className="btn-cancel" onClick={onClose}>Tutup</button>
-        <button type="button" className="btn-save" onClick={handleSave} disabled={saving}>
-          {saving?"Menyimpan…":saved?"✅ Tersimpan!":"Simpan Tarif"}
-        </button>
+        <input className="finput" style={{ flex: 1 }} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e => setTxt(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && sendChat()} />
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send /></button>
       </div>
     </div>
   );
@@ -946,10 +644,22 @@ function AdminChatPanel({onLogout}) {
 
   const updStatus = async (s) => {
     if (!selOrd) return;
+    const current = selOrd.status;
+    const allowedMap = {
+      pending:        ['confirmed'],
+      paid_pending_confirm: ['confirmed'],
+      confirmed:      ['shipped'],
+      shipped:        ['done'],
+      done:           [],
+      cancelled:      []
+    };
+    if (!allowedMap[current]?.includes(s)) {
+      return;
+    }
     try {
       await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
       setSelOrd(o=>({...o,status:s}));
-      if (s==="confirmed"&&selOrd.productId) {
+      if (s==="confirmed" && selOrd.productId) {
         try {
           const prodRef=doc(db,"products",selOrd.productId);
           const prodSnap=await getDoc(prodRef);
@@ -990,6 +700,20 @@ function AdminChatPanel({onLogout}) {
   const SL={pending:"Pending",paid_pending_confirm:"Sudah Bayar",
     confirmed:"Konfirmasi",shipped:"Kirim",done:"Selesai",cancelled:"Batal"};
 
+  const isStatusAllowed = (targetStatus) => {
+    const current = selOrd?.status || "pending";
+    if (current === "pending" || current === "paid_pending_confirm") {
+      return targetStatus === "confirmed";
+    }
+    if (current === "confirmed") {
+      return targetStatus === "shipped";
+    }
+    if (current === "shipped") {
+      return targetStatus === "done";
+    }
+    return false;
+  };
+
   return (
     <div className="acp">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1028,46 +752,48 @@ function AdminChatPanel({onLogout}) {
             <p>👤 {selOrd.buyerName} · 📱 {selOrd.buyerPhone}</p>
             <p>📍 {selOrd.address}</p>
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
-            {selOrd.courierLabel&&(
-              <p>🚚 Kurir: <strong>{selOrd.courierLabel}</strong>
-                {selOrd.courierType==="jne" && selOrd.shippingCost>0 && ` · Ongkir: ${fRp(selOrd.shippingCost)}`}
-              </p>
-            )}
-            {selOrd.shippingPending&&(
-              <p className="acp-ship-alert">⚠️ Ongkir belum dihitung — infokan ke buyer via chat</p>
-            )}
             {selOrd.buyerConfirmed&&<p style={{color:"var(--green)",fontWeight:600}}>✅ Buyer sudah konfirmasi terima</p>}
           </div>
+
           <div className="acp-status-row">
-            {Object.entries(SL).map(([k,v])=>{
-              const cur = selOrd.status || "pending";
-              // ── State machine: hanya 1 langkah maju + Batal yang aktif ──
-              let disabled = true;
-              if (k === cur) {
-                // Tombol status saat ini selalu tampil aktif (sebagai indikator)
-                disabled = false;
-              } else if (k === "cancelled") {
-                // Batal selalu jadi escape hatch, KECUALI saat sudah selesai/dibatalkan
-                disabled = (cur === "done" || cur === "cancelled");
-              } else if (cur === "pending" && k === "paid_pending_confirm") {
-                disabled = false; // Pending → Sudah Bayar (biasanya otomatis dari buyer)
-              } else if (cur === "paid_pending_confirm" && k === "confirmed") {
-                disabled = false; // Sudah Bayar → Konfirmasi
-              } else if (cur === "confirmed" && k === "shipped") {
-                disabled = false; // Konfirmasi → Kirim
-              } else if (cur === "shipped" && k === "done") {
-                disabled = false; // Kirim → Selesai
-              }
-              return (
-                <button key={k} type="button"
-                  className={`btn-status${selOrd.status===k?" on":""}`}
-                  style={selOrd.status===k?{background:SC[k],borderColor:SC[k]}:{}}
-                  onClick={()=>updStatus(k)}
-                  disabled={disabled}>{v}
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="confirmed"?" on":""}`}
+              style={selOrd.status==="confirmed"?{background:SC.confirmed,borderColor:SC.confirmed}:{}}
+              onClick={()=>updStatus("confirmed")}
+              disabled={!isStatusAllowed("confirmed")}
+            >
+              Konfirmasi
+            </button>
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="shipped"?" on":""}`}
+              style={selOrd.status==="shipped"?{background:SC.shipped,borderColor:SC.shipped}:{}}
+              onClick={()=>updStatus("shipped")}
+              disabled={!isStatusAllowed("shipped")}
+            >
+              Kirim
+            </button>
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="done"?" on":""}`}
+              style={selOrd.status==="done"?{background:SC.done,borderColor:SC.done}:{}}
+              onClick={()=>updStatus("done")}
+              disabled={!isStatusAllowed("done")}
+            >
+              Selesai
+            </button>
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="cancelled"?" on":""}`}
+              style={selOrd.status==="cancelled"?{background:SC.cancelled,borderColor:SC.cancelled}:{}}
+              onClick={()=>updStatus("cancelled")}
+              disabled={selOrd.status!=="pending" && selOrd.status!=="paid_pending_confirm"}
+            >
+              Batal
+            </button>
           </div>
+
           <div className="chat-msgs" ref={chatRef} style={{height:220}}>
             {msgs.map(m=>(
               <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
@@ -1149,7 +875,7 @@ function ProductDetail({p, onOrder}) {
   );
 }
 
-// ─── Product Form ─────────────────────────────────────────────────────────
+// ─── PRODUCT FORM (PERBAIKAN TOTAL UPLOAD) ──────────────────────────────
 function ProductForm({initial,onSave,onCancel,saving}) {
   const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
   const [f,setF]=useState(initial?{...blank,...initial}:blank);
@@ -1159,91 +885,127 @@ function ProductForm({initial,onSave,onCancel,saving}) {
   const [up,setUp]=useState(false);
   const [uploadError,setUploadError]=useState("");
   const [uploadProgress,setUploadProgress]=useState(0);
+  const [uploadTask, setUploadTask] = useState(null);
 
   const ch=(k,v)=>setF(x=>({...x,[k]:v}));
 
-  const uploadWithTimeout = async (storageRef, file, timeoutMs=30000) => {
-    return Promise.race([
-      uploadBytes(storageRef, file),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Upload timeout setelah 30 detik")), timeoutMs)
-      )
-    ]);
-  };
-
-  const submit=async()=>{
+  const submit = async () => {
     setUploadError("");
     setUploadProgress(0);
     
     if(!f.name?.trim()) return alert("Nama produk wajib diisi!");
     if(!f.price || Number(f.price)<=0) return alert("Harga wajib diisi dan harus lebih dari 0!");
     
-    let images=Array.isArray(f.images)?[...f.images]:[];
+    // 1. Simpan produk dulu ke Firestore (tanpa gambar)
+    const data = {
+      ...f,
+      price: Number(f.price),
+      stock: Number(f.stock) || 0,
+      rating: Number(f.rating) || 0,
+      sold: Number(f.sold) || 0,
+      images: Array.isArray(f.images) ? f.images : [],
+    };
     
-    if(file){
+    let productId = null;
+    try {
+      // Jika edit, update dulu
+      if (initial?.id) {
+        const { id, ...r } = data;
+        await updateDoc(doc(db, "products", initial.id), { ...r, updatedAt: serverTimestamp() });
+        productId = initial.id;
+        console.log("✅ Produk diupdate, ID:", productId);
+      } else {
+        const docRef = await addDoc(collection(db, "products"), { ...data, createdAt: serverTimestamp() });
+        productId = docRef.id;
+        console.log("✅ Produk ditambahkan, ID:", productId);
+      }
+    } catch(e) {
+      console.error("❌ Gagal simpan produk:", e);
+      alert("Gagal menyimpan data produk: " + e.message);
+      return;
+    }
+
+    // 2. Jika ada file, upload gambar
+    if (file) {
       setUp(true);
       setUploadProgress(10);
-      try{
-        console.log("📤 Mulai upload file:", file.name, `size: ${(file.size/1024).toFixed(1)}KB`);
+      try {
         const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-        
-        // Upload dengan timeout
-        setUploadProgress(30);
-        const snapshot = await uploadWithTimeout(storageRef, file);
-        console.log("✅ Upload selesai, snapshot:", snapshot);
-        setUploadProgress(70);
-        
-        const url = await getDownloadURL(snapshot.ref);
+        const uploadTaskInstance = uploadBytesResumable(storageRef, file);
+        setUploadTask(uploadTaskInstance);
+
+        const url = await new Promise((resolve, reject) => {
+          uploadTaskInstance.on(
+            'state_changed',
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(Math.round(progress));
+              console.log(`Upload progress: ${Math.round(progress)}%`);
+            },
+            (error) => {
+              reject(error);
+            },
+            async () => {
+              try {
+                const downloadURL = await getDownloadURL(uploadTaskInstance.snapshot.ref);
+                resolve(downloadURL);
+              } catch(e) {
+                reject(e);
+              }
+            }
+          );
+        });
+
         console.log("📥 Download URL:", url);
-        setUploadProgress(100);
-        
-        images = [url, ...images.filter(i => i !== url)];
+        // Update produk dengan URL gambar
+        const currentImages = Array.isArray(data.images) ? data.images : [];
+        const newImages = [url, ...currentImages];
+        await updateDoc(doc(db, "products", productId), {
+          images: newImages,
+          updatedAt: serverTimestamp()
+        });
         setPrev(url);
         setFile(null);
-        setUploadProgress(0);
-      }catch(e){
+        setUploadProgress(100);
+        alert("✅ Produk berhasil disimpan dengan foto!");
+      } catch(e) {
         console.error("❌ Upload gagal:", e);
         setUploadError("Upload foto gagal: " + (e.message || "Unknown error"));
-        // Tawarkan tetap simpan tanpa foto
+        // Produk sudah tersimpan, hanya fotonya yang gagal
         const ok = window.confirm(
           `Upload foto gagal: ${e.message}\n\n` +
-          `Anda bisa:\n` +
-          `1. Klik "OK" untuk simpan produk TANPA foto\n` +
-          `2. Klik "Batal" untuk kembali dan coba lagi`
+          `Produk sudah tersimpan, tapi tanpa foto.\n` +
+          `Klik "OK" untuk tetap menyimpan produk (tanpa foto),\n` +
+          `atau "Batal" untuk membatalkan (produk akan dihapus).`
         );
-        setUp(false);
-        setUploadProgress(0);
-        if(!ok) return; // batal
-        // Lanjut simpan tanpa foto
+        if (!ok) {
+          // Hapus produk yang baru dibuat jika user batal
+          if (!initial?.id) {
+            try { await deleteDoc(doc(db, "products", productId)); } catch(e) {}
+          }
+          setUp(false);
+          setUploadProgress(0);
+          return;
+        }
+        // Lanjutkan, produk tetap tersimpan tanpa foto
       }
       setUp(false);
+    } else {
+      // Tidak ada file, langsung selesai
+      alert("✅ Produk berhasil disimpan!");
     }
 
-    if(images.length===0 && !uploadError){
-      const ok = window.confirm("Anda belum menambahkan foto. Lanjutkan tanpa foto?");
-      if(!ok) return;
-    }
-
-    try{
-      const data = {
-        ...f,
-        price: Number(f.price),
-        stock: Number(f.stock) || 0,
-        rating: Number(f.rating) || 0,
-        sold: Number(f.sold) || 0,
-        images: images,
-      };
-      await onSave(data);
-      setF(blank);
-      setPrev("");
-      setFile(null);
-      setIU("");
-      setUploadError("");
-      setUploadProgress(0);
-    }catch(e){
-      console.error("❌ Gagal menyimpan produk:", e);
-      alert("Gagal menyimpan produk: " + e.message);
-    }
+    // Reset form
+    setF(blank);
+    setPrev("");
+    setFile(null);
+    setIU("");
+    setUploadError("");
+    setUploadProgress(0);
+    setUploadTask(null);
+    // Panggil onSave untuk menutup modal (tapi produk sudah tersimpan di atas)
+    // Kita panggil onSave agar parent tahu dan tutup modal
+    onSave(data); // data ini sudah tidak dipakai, tapi untuk trigger close
   };
 
   const handleAddUrl = () => {
@@ -1394,7 +1156,6 @@ export default function App() {
   const [isAdmin,      setIsAdmin]      = useState(false);
   const [showLogin,    setShowLogin]    = useState(false);
   const [showACP,      setShowACP]      = useState(false);
-  const [showShipRates,setShowShipRates]= useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [dark,         setDark]         = useState(true);
@@ -1402,14 +1163,12 @@ export default function App() {
   const [notifCnt,     setNotifCnt]     = useState(0);
   const menuRef = useRef(null);
 
-  // Tutup menu saat klik luar
   useEffect(()=>{
     const h=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener("mousedown",h);
     return ()=>document.removeEventListener("mousedown",h);
   },[]);
 
-  // Firebase Auth listener
   useEffect(()=>{
     const adminEmail = import.meta.env.VITE_ADMIN_EMAIL||"awianton2@gmail.com";
     return onAuthStateChanged(auth,(user)=>{
@@ -1418,7 +1177,6 @@ export default function App() {
     });
   },[]);
 
-  // Produk realtime
   useEffect(()=>{
     const q=query(collection(db,"products"),orderBy("createdAt","desc"));
     return onSnapshot(q,
@@ -1427,7 +1185,6 @@ export default function App() {
     );
   },[]);
 
-  // Notif badge admin
   useEffect(()=>{
     if(!isAdmin) return;
     const q=query(collection(db,"orders"),where("status","in",["pending","paid_pending_confirm"]));
@@ -1452,14 +1209,10 @@ export default function App() {
   if(sort==="rating")     list=[...list].sort((a,b)=>(b.rating||0)-(a.rating||0));
   if(sort==="sold")       list=[...list].sort((a,b)=>(b.sold||0)-(a.sold||0));
 
-  const handleSave=async(data)=>{
-    setSaving(true);
-    try{
-      if(editP?.id){const{id,...r}=data;await updateDoc(doc(db,"products",editP.id),{...r,updatedAt:serverTimestamp()});}
-      else{await addDoc(collection(db,"products"),{...data,createdAt:serverTimestamp()});}
-      setShowForm(false);setEditP(null);
-    }catch(e){alert("Gagal simpan produk: "+e.message);}
-    setSaving(false);
+  const handleSave = async (data) => {
+    // Fungsi ini hanya dipanggil untuk menutup modal setelah produk tersimpan
+    setShowForm(false);
+    setEditP(null);
   };
 
   const handleDelete=async()=>{
@@ -1471,8 +1224,6 @@ export default function App() {
 
   const closeMenu=()=>setMenuOpen(false);
   const handleLogout=()=>{ signOut(auth); setIsAdmin(false); setShowACP(false); };
-
-  // Hitung pesanan aktif user dari localStorage
   const myActiveOrders = lsGet().filter(o=>o.status&&!["done","cancelled"].includes(o.status)).length;
 
   return (
@@ -1520,9 +1271,6 @@ export default function App() {
                         </button>
                         <button type="button" className="dd-item" onClick={()=>{setShowACP(true);closeMenu();}}>
                           <Ic.Chat/> Pesanan {notifCnt>0&&<span className="dd-badge">{notifCnt}</span>}
-                        </button>
-                        <button type="button" className="dd-item" onClick={()=>{setShowShipRates(true);closeMenu();}}>
-                          🚚 Atur Tarif Kirim
                         </button>
                         <div className="dd-info">
                           <span>📦 {products.length} produk</span>
@@ -1609,9 +1357,6 @@ export default function App() {
         </Modal>
         <Modal open={showMyOrders}   onClose={()=>setShowMyOrders(false)}>
           <UserChatPanel/>
-        </Modal>
-        <Modal open={showShipRates}  onClose={()=>setShowShipRates(false)}>
-          <ShippingRatesAdmin onClose={()=>setShowShipRates(false)}/>
         </Modal>
         <Modal open={showACP}        onClose={()=>setShowACP(false)}>
           <AdminChatPanel onLogout={handleLogout}/>
@@ -1741,42 +1486,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .loc-msg.ok{color:var(--green)}
 .loc-msg.err{color:var(--red)}
 .ord-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.8rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-/* Courier type dropdown selector */
-.courier-select{cursor:pointer}
-.ship-manual-note{padding:11px 13px;background:#7c6af514;border:1px solid #7c6af530;border-radius:10px;font-size:.8rem;color:var(--text2);line-height:1.7}
-.ship-manual-note strong{color:var(--accent)}
-.ship-manual-note.ready{background:#4caf8214;border-color:#4caf8230}
-.ship-manual-price{font-size:1.1rem;font-weight:700;color:var(--green);margin-top:4px}
-.ord-total-note{font-size:.7rem;color:var(--text3);margin-top:2px;font-style:italic}
-/* Admin: Atur Tarif Pengiriman */
-.ship-admin-desc{font-size:.8rem;color:var(--text3);line-height:1.6;margin-bottom:14px}
-.ship-rates-list{display:flex;flex-direction:column;gap:10px}
-.ship-rate-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)}
-.ship-rate-label{font-size:.85rem;color:var(--text);font-weight:500;flex:1}
-.ship-rate-input-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
-.ship-rate-input-wrap span{font-size:.8rem;color:var(--text3)}
-.ship-rate-input{width:100px;text-align:right;padding:7px 9px}
-/* Shipping cost UI */
-.ship-section{position:relative}
-.ship-city-search{position:relative;display:flex;align-items:center}
-.ship-loading-dot{position:absolute;right:10px;font-size:.8rem}
-.ship-city-list{margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto}
-.ship-city-item{display:block;width:100%;text-align:left;padding:9px 12px;border:none;background:transparent;color:var(--text2);font-size:.8rem;cursor:pointer;font-family:'DM Sans',sans-serif;border-bottom:1px solid var(--border)}
-.ship-city-item:last-child{border-bottom:none}
-.ship-city-item:hover{background:var(--bg2);color:var(--gold)}
-.ship-msg{font-size:.78rem;color:var(--text3);margin-top:6px}
-.ship-msg.err{color:var(--red)}
-.ship-options{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.ship-option{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text2);transition:all .2s;text-align:left}
-.ship-option:hover{border-color:var(--gold)}
-.ship-option.on{border-color:var(--gold);background:#c9a84c14}
-.ship-option strong{font-size:.82rem;color:var(--text);display:block}
-.ship-option p{font-size:.72rem;color:var(--text3);margin-top:2px}
-.ship-option span{font-weight:700;color:var(--gold);font-size:.85rem;flex-shrink:0;margin-left:10px}
-.ord-total-box{padding:12px;background:var(--bg3);border-radius:10px;display:flex;flex-direction:column;gap:6px}
-.ord-total-row{display:flex;justify-content:space-between;font-size:.82rem;color:var(--text2)}
-.ord-total-row.total{padding-top:8px;border-top:1px solid var(--border);font-weight:700;font-size:.95rem;color:var(--text)}
-.ord-total-row.total span:last-child{color:var(--gold)}
 .qris-head{display:flex;align-items:center;gap:8px;padding:16px 16px 0;font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .qris-body{padding:16px;text-align:center}
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
@@ -1810,18 +1519,15 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .del-confirm-bar span{flex:1}
 .btn-yes-del{padding:4px 12px;border-radius:6px;border:none;background:var(--red);color:#fff;font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
 .btn-no-del{padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);font-size:.78rem;cursor:pointer;font-family:'DM Sans',sans-serif}
-/* Buyer confirm box */
 .buyer-confirm-box{padding:10px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
 .btn-buyer-confirm{width:100%;padding:11px;border-radius:10px;border:none;background:#4caf82;color:#fff;font-weight:700;font-size:.88rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s}
 .btn-buyer-confirm:hover:not(:disabled){background:#3d9e70}
 .btn-buyer-confirm:disabled{opacity:.6;cursor:not-allowed}
-/* Buyer thankyou box — permanen setelah konfirmasi */
 .buyer-thankyou-box{padding:14px 16px;background:#4caf8218;border-bottom:1px solid #4caf8233;flex-shrink:0;text-align:center}
 .buyer-thankyou-title{font-family:'Playfair Display',serif;font-size:1rem;color:var(--green);margin-bottom:4px;font-weight:700}
 .buyer-thankyou-sub{font-size:.8rem;color:var(--text2);line-height:1.6;margin-bottom:10px}
 .btn-wa-help{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:20px;background:#25d366;color:#fff;font-weight:600;font-size:.8rem;text-decoration:none;transition:all .2s}
 .btn-wa-help:hover{background:#1da851}
-/* Admin panel */
 .acp{padding:16px;min-height:380px}
 .acp-ttl{font-family:'Playfair Display',serif;font-size:1.1rem;margin-bottom:0;display:flex;align-items:center;gap:7px;color:var(--text)}
 .acp-list{display:flex;flex-direction:column;gap:8px}
@@ -1837,12 +1543,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-del-order{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid #e05a5a44;background:transparent;color:var(--red);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif}
 .btn-del-order:hover{background:#e05a5a18}
 .acp-order-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-.acp-ship-alert{color:var(--red);font-weight:600;background:#e05a5a14;padding:4px 8px;border-radius:6px;margin-top:4px}
 .acp-status-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px}
 .btn-status{padding:5px 10px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;text-transform:capitalize}
 .btn-status:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+.btn-status:disabled{opacity:0.4;cursor:not-allowed}
 .btn-status.on{color:#0d0d14;font-weight:700}
-.btn-status:disabled{opacity:.3;cursor:not-allowed;background:transparent!important;border-color:var(--border)!important;color:var(--text3)!important}
 .pform{padding:18px}
 .pform-ttl{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:14px;color:var(--text)}
 .pform-imgs{display:flex;gap:10px;margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:10px;flex-wrap:wrap}
