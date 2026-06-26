@@ -6,7 +6,6 @@ import {
 } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
-import { Geolocation } from '@capacitor/geolocation';
 
 const firebaseConfig = {
   apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
@@ -57,20 +56,7 @@ const normGender = (g="") => {
 
 const getStock = (p) => Number(p?.stock ?? p?.size ?? 0);
 
-// ─── Haversine ────────────────────────────────────────────────────────────
-const haversine = (lat1, lon1, lat2, lon2) => {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
-};
-
-// ─── ORS ──────────────────────────────────────────────────────────────────
-const ORS_BASE = "https://api.openrouteservice.org/v2/directions/driving-car";
-
-// ─── LocalStorage ────────────────────────────────────────────────────────
+// ─── LocalStorage helpers ─────────────────────────────────────────────────
 const LS_KEY = "parevie_my_orders";
 const lsGet  = () => { try { return JSON.parse(localStorage.getItem(LS_KEY)||"[]"); } catch { return []; } };
 const lsSet  = (arr) => { try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch {} };
@@ -99,7 +85,7 @@ const Ic = {
   Admin:  ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
   Upload: ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>,
   Tag:    ()=><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>,
-  Sun:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="3" y1="12" x2="5" y2="12"/></svg>,
+  Sun:    ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
   Moon:   ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
   Send:   ()=><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>,
   Loc:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>,
@@ -108,7 +94,6 @@ const Ic = {
   Menu:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
   Qris:   ()=><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="3" height="3"/><line x1="17" y1="17" x2="21" y2="17"/><line x1="21" y1="14" x2="21" y2="17"/></svg>,
   WA:     ()=><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>,
-  Ors:    ()=><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 15 15"/></svg>,
 };
 
 // ─── Modal ────────────────────────────────────────────────────────────────
@@ -182,236 +167,42 @@ function OrderModal({p}) {
   const [paying,   setPaying]  = useState(false);
   const chatRef = useRef(null);
 
-  // ─── Daftar kurir (hanya yang tersedia secara nasional) ──
-  const RAJAONGKIR_COURIERS = [
-    { key: "jne", label: "JNE" },
-    { key: "tiki", label: "TIKI" },
-    { key: "pos", label: "POS Indonesia" },
-    { key: "jnt", label: "J&T Express" },
-    { key: "sicepat", label: "SiCepat" },
-    { key: "wahana", label: "Wahana" },
-    { key: "ninja", label: "Ninja Xpress" },
-    { key: "lion", label: "Lion Parcel" },
-    { key: "anteraja", label: "AnterAja" },
-    { key: "ide", label: "ID Express" }
-    // SAP Express dihapus
-  ];
-  const MANUAL_COURIERS = [
-    { key: "gosend", label: "GoSend (Gojek)" },
-    { key: "grab", label: "Grab Express" },
-    { key: "lalamove", label: "Lalamove" },
-    { key: "kurir_toko", label: "Kurir Toko Sendiri" }
-  ];
-
-  // ── State ──
-  const [courierType, setCourierType] = useState("jne");
-  const [manualRates, setManualRates] = useState({});
-  const [loadingRates, setLoadingRates] = useState(true);
-
-  const [ratePerKm, setRatePerKm] = useState(0);
-  const [adminCoords, setAdminCoords] = useState(null);
-  const [buyerCoords, setBuyerCoords] = useState(null);
-  const [distance, setDistance] = useState(null);
-  const [isLoadingOrs, setIsLoadingOrs] = useState(false);
-  const [orsApiKey, setOrsApiKey] = useState("");
-  const [distanceMethod, setDistanceMethod] = useState("haversine");
-
-  // ── RajaOngkir city search ──
-  const [destKeyword, setDestKeyword]   = useState("");
-  const [destOptions, setDestOptions]   = useState([]);
-  const [destCity,    setDestCity]      = useState(null);
-  const [searchingCity, setSearchingCity] = useState(false);
-  const [shipOptions, setShipOptions]   = useState([]);
-  const [shipSelected,setShipSelected]  = useState(null);
-  const [loadingShip, setLoadingShip]   = useState(false);
-  const [shipError,   setShipError]     = useState("");
-
-  const FN_SEARCH_CITY = import.meta.env.VITE_FN_SEARCH_CITY_URL || "";
-  const FN_SHIP_COST    = import.meta.env.VITE_FN_SHIP_COST_URL    || "";
-  const ORIGIN_CITY_ID  = import.meta.env.VITE_ORIGIN_CITY_ID      || "";
-
-  // ── Ambil data tarif & ORS key dari Firestore ──
-  useEffect(()=>{
-    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
-      const data = snap.data();
-      if(data){
-        setManualRates(data.rates||{});
-        setRatePerKm(data.ratePerKm||0);
-        setAdminCoords(data.adminLocation||null);
-        setOrsApiKey(data.orsApiKey||"");
-      } else {
-        setManualRates({});
-        setRatePerKm(0);
-        setAdminCoords(null);
-        setOrsApiKey("");
-      }
-      setLoadingRates(false);
-    }, ()=>setLoadingRates(false));
-    return ()=>unsub();
-  },[]);
-
-  // ── Hitung jarak ORS ──
-  useEffect(()=>{
-    if(!buyerCoords || !adminCoords) {
-      setDistance(null);
-      setDistanceMethod("haversine");
-      return;
-    }
-
-    if(orsApiKey && orsApiKey.length > 10) {
-      const fetchOrs = async () => {
-        setIsLoadingOrs(true);
-        try {
-          const url = `${ORS_BASE}?api_key=${orsApiKey}&start=${adminCoords.lng},${adminCoords.lat}&end=${buyerCoords.lng},${buyerCoords.lat}`;
-          const res = await fetch(url);
-          const data = await res.json();
-          if(data.routes && data.routes.length > 0) {
-            const distM = data.routes[0].summary.distance;
-            const distKm = distM / 1000;
-            setDistanceMethod("ors");
-            setDistance(distKm);
-          } else {
-            const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
-            setDistance(dist);
-            setDistanceMethod("haversine");
-          }
-        } catch(e) {
-          console.warn("ORS gagal, fallback haversine:", e);
-          const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
-          setDistance(dist);
-          setDistanceMethod("haversine");
-        } finally {
-          setIsLoadingOrs(false);
-        }
-      };
-      fetchOrs();
-    } else {
-      const dist = haversine(adminCoords.lat, adminCoords.lng, buyerCoords.lat, buyerCoords.lng);
-      setDistance(dist);
-      setDistanceMethod("haversine");
-    }
-  }, [buyerCoords, adminCoords, orsApiKey]);
-
-  // ── Fungsi GPS ──
-  const getLocation = async () => {
-    setLocState("loading");
-    setGpsText("Mengambil lokasi GPS…");
-    try {
-      const perm = await Geolocation.requestPermissions();
-      if (perm.location !== 'granted') {
-        setLocState("error");
-        setGpsText("Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan");
-        return;
-      }
-      const coords = await Geolocation.getCurrentPosition({
-        enableHighAccuracy: true,
-        timeout: 15000,
-      });
-      const la = coords.coords.latitude.toFixed(6);
-      const lo = coords.coords.longitude.toFixed(6);
-      const url = `https://maps.google.com/?q=${la},${lo}`;
-      setGpsText(`📍 ${la}, ${lo}`);
-      setLocState("done");
-      setBuyerCoords({
-        lat: coords.coords.latitude,
-        lng: coords.coords.longitude
-      });
-      setAddr(prev =>
-        prev.includes("GPS:") ? prev : (prev.trim() ? prev + "\n" : "") + `GPS: ${url}`
-      );
-    } catch (err) {
+  const getLocation = () => {
+    if (!navigator.geolocation) { setLocState("error"); setGpsText("GPS tidak tersedia."); return; }
+    setLocState("loading"); setGpsText("Mengambil lokasi GPS…");
+    const tid = setTimeout(()=>{
       setLocState("error");
-      let m = "Izin lokasi ditolak. Aktifkan GPS & izinkan di pengaturan.";
-      if (err.message && err.message.toLowerCase().includes("denied")) {
-        m = "Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan";
-      }
-      setGpsText(m);
-    }
+      setGpsText("Timeout. Aktifkan GPS & izin lokasi di Pengaturan → Aplikasi → Izin → Lokasi.");
+    },15000);
+    navigator.geolocation.getCurrentPosition(
+      (pos)=>{
+        clearTimeout(tid);
+        const la=pos.coords.latitude.toFixed(6), lo=pos.coords.longitude.toFixed(6);
+        const url=`https://maps.google.com/?q=${la},${lo}`;
+        setGpsText(`📍 ${la}, ${lo}`); setLocState("done");
+        setAddr(prev=>prev.includes("GPS:")?prev:(prev.trim()?prev+"\n":"")+`GPS: ${url}`);
+      },
+      (err)=>{
+        clearTimeout(tid); setLocState("error");
+        const m=err.code===1?"Izin lokasi DITOLAK.\n👉 Pengaturan → Aplikasi → KatalogPro → Izin → Lokasi → Izinkan"
+          :err.code===2?"GPS tidak ditemukan. Pastikan GPS aktif."
+          :"Timeout. Coba di area terbuka.";
+        setGpsText(m);
+      },
+      {enableHighAccuracy:true,timeout:12000,maximumAge:0}
+    );
   };
 
-  // ── Cari kota (untuk semua kurir RajaOngkir) ──
-  const searchCity = async (kw) => {
-    setDestKeyword(kw);
-    setDestCity(null);
-    setShipOptions([]);
-    setShipSelected(null);
-    if (kw.trim().length < 3 || !FN_SEARCH_CITY) { setDestOptions([]); return; }
-    setSearchingCity(true);
-    try {
-      const r = await fetch(`${FN_SEARCH_CITY}?keyword=${encodeURIComponent(kw)}`);
-      const data = await r.json();
-      setDestOptions(data.cities || []);
-    } catch { setDestOptions([]); }
-    setSearchingCity(false);
-  };
-
-  const pickCity = async (city) => {
-    setDestCity(city);
-    setDestKeyword(city.city_name);
-    setDestOptions([]);
-    if (!ORIGIN_CITY_ID || !FN_SHIP_COST) {
-      setShipError("Konfigurasi ongkir belum lengkap. Hubungi admin.");
-      return;
-    }
-    setLoadingShip(true); setShipError("");
-    try {
-      const r = await fetch(FN_SHIP_COST, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          origin: ORIGIN_CITY_ID,
-          destination: city.city_id,
-          weight: 200,
-          courier: courierType,
-        }),
-      });
-      const data = await r.json();
-      if (data.error) setShipError(data.error);
-      else setShipOptions(data.options || []);
-    } catch { setShipError("Gagal menghitung ongkir. Coba lagi."); }
-    setLoadingShip(false);
-  };
-
-  // ── Submit order ──
   const submitOrder = async () => {
     if (!name.trim()) return alert("Nama wajib diisi!");
     if (!phone.trim()) return alert("Nomor WhatsApp wajib diisi!");
     if (!addr.trim()) return alert("Alamat pengiriman wajib diisi!");
     setSub(true);
     try {
-      let finalShippingCost = 0;
-      const isRajaOngkir = RAJAONGKIR_COURIERS.some(c => c.key === courierType);
-      if (isRajaOngkir) {
-        finalShippingCost = shipSelected?.cost || 0;
-      } else {
-        const flat = manualRates[courierType];
-        if (typeof flat === "number" && flat >= 0) {
-          finalShippingCost = flat;
-        } else if (distance && ratePerKm > 0) {
-          finalShippingCost = distance * ratePerKm;
-        } else {
-          finalShippingCost = 0;
-        }
-      }
-      const total = p.price + finalShippingCost;
-
       const oRef = await addDoc(collection(db,"orders"),{
         productId:p.id, productName:p.name, productImg:getImg(p),
         price:p.price, buyerName:name.trim(), buyerPhone:phone.trim(),
         address:addr.trim(), note:note.trim(), status:"pending",
-        courierType: courierType,
-        courierLabel: getCourierLabel(courierType),
-        shippingCity: destCity?.city_name || "",
-        shippingCourier: shipSelected?.courier || "",
-        shippingService: shipSelected?.service || "",
-        shippingCost: finalShippingCost,
-        shippingPending: (!isRajaOngkir && finalShippingCost===0 && !manualRates[courierType]),
-        totalAmount: total,
-        distance: distance || null,
-        distanceMethod: distanceMethod || "haversine",
-        ratePerKm: ratePerKm || 0,
-        adminCoords: adminCoords || null,
-        buyerCoords: buyerCoords || null,
         createdAt:serverTimestamp(),
       });
       setOId(oRef.id);
@@ -423,21 +214,14 @@ function OrderModal({p}) {
       await addDoc(collection(db,"notifications"),{
         type:"new_order", orderId:oRef.id,
         message:`🛒 Pesanan baru: ${p.name}`,
-        detail:`Dari: ${name.trim()} (${phone.trim()})${finalShippingCost===0 && !isRajaOngkir ? ` · 🚨 Perlu set tarif ${getCourierLabel(courierType)}` : ""}`,
+        detail:`Dari: ${name.trim()} (${phone.trim()})`,
         address:addr.trim(), read:false, createdAt:serverTimestamp(),
       });
       await addDoc(collection(db,`orders/${oRef.id}/chats`),{
         from:"system",
-        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}\nPengiriman: ${getCourierLabel(courierType)}${finalShippingCost>0?` (${fRp(finalShippingCost)})`:""}${distance?` · Jarak ${distance.toFixed(1)} km (${distanceMethod==="ors"?"ORS":"estimasi"})`:""}`,
+        text:`Pesanan diterima! Menunggu konfirmasi admin.\nProduk: ${p.name} — ${fRp(p.price)}`,
         createdAt:serverTimestamp(),
       });
-      if (!isRajaOngkir && finalShippingCost===0 && !manualRates[courierType]) {
-        await addDoc(collection(db,`orders/${oRef.id}/chats`),{
-          from:"system",
-          text:`❗ Mohon admin set tarif ${getCourierLabel(courierType)} (Menu Admin → Atur Tarif Kirim) atau infokan manual ke pembeli.`,
-          createdAt:serverTimestamp(),
-        });
-      }
       setStep("qris");
     } catch(e){ alert("Gagal membuat pesanan: "+e.message); }
     setSub(false);
@@ -483,27 +267,6 @@ function OrderModal({p}) {
     } catch(e){ alert("Gagal: "+e.message); }
   };
 
-  // ── Helper label ──
-  const getCourierLabel = (key) => {
-    const found = [...RAJAONGKIR_COURIERS, ...MANUAL_COURIERS].find(c => c.key === key);
-    return found ? found.label : key;
-  };
-
-  const isRajaOngkirCourier = (key) => RAJAONGKIR_COURIERS.some(c => c.key === key);
-  const isManualCourier = (key) => MANUAL_COURIERS.some(c => c.key === key);
-
-  // ── Ongkir preview ──
-  let previewShipping = 0;
-  if (isRajaOngkirCourier(courierType)) {
-    previewShipping = shipSelected?.cost || 0;
-  } else {
-    const flat = manualRates[courierType];
-    if (typeof flat === "number" && flat >= 0) previewShipping = flat;
-    else if (distance && ratePerKm > 0) previewShipping = distance * ratePerKm;
-    else previewShipping = 0;
-  }
-  const totalWithShipping = p.price + previewShipping;
-
   if (step==="form") return (
     <div className="ord-wrap">
       <div className="ord-hdr">
@@ -527,143 +290,13 @@ function OrderModal({p}) {
             {locState==="loading"?" Mengambil GPS…":locState==="done"?" Lokasi Tersimpan ✓":locState==="error"?" Coba Lagi":" Tambah Lokasi GPS"}
           </button>
           {gpsText&&<p className={`loc-msg${locState==="error"?" err":locState==="done"?" ok":""}`}>{gpsText}</p>}
-          {isLoadingOrs && <p style={{fontSize:".75rem",color:"var(--gold)"}}>⏳ Menghitung jarak dengan ORS…</p>}
-          {distance!==null && !isLoadingOrs && (
-            <p style={{fontSize:".75rem",color:"var(--gold)",marginTop:4}}>
-              📏 Jarak ke toko: <strong>{distance.toFixed(1)} km</strong>
-              {distanceMethod==="ors" && <span style={{fontSize:".65rem",marginLeft:6,color:"var(--green)"}}>✅ ORS</span>}
-              {distanceMethod==="haversine" && <span style={{fontSize:".65rem",marginLeft:6,color:"var(--text3)"}}>⚠️ estimasi</span>}
-            </p>
-          )}
         </div>
         <div className="fg"><label>Catatan (opsional)</label>
           <input className="finput" value={note} onChange={e=>setNote(e.target.value)} placeholder="Warna, ukuran, dll…"/></div>
-
-        {/* ─── Pilih Kurir ──────────────────────────────────────────────── */}
-        <div className="fg">
-          <label>🚚 Pilih Kurir</label>
-          <select className="finput courier-select" value={courierType}
-            onChange={e=>setCourierType(e.target.value)}>
-            <optgroup label="📦 Ekspedisi via RajaOngkir">
-              {RAJAONGKIR_COURIERS.map(c=>(
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="🛵 Kurir Instant (per km)">
-              {MANUAL_COURIERS.map(c=>(
-                <option key={c.key} value={c.key}>{c.label}</option>
-              ))}
-            </optgroup>
-          </select>
-        </div>
-
-        {/* ─── Jika kurir RajaOngkir ────────────────────────────────────── */}
-        {isRajaOngkirCourier(courierType) && (
-          <div className="fg ship-section">
-            <label>Hitung Ongkos Kirim {getCourierLabel(courierType)}</label>
-            <div className="ship-city-search">
-              <input className="finput" value={destKeyword}
-                onChange={e=>searchCity(e.target.value)}
-                placeholder="Cari kota tujuan… (min. 3 huruf)"/>
-              {searchingCity && <span className="ship-loading-dot">⏳</span>}
-            </div>
-            {destOptions.length>0 && (
-              <div className="ship-city-list">
-                {destOptions.map(c=>(
-                  <button key={c.city_id} type="button" className="ship-city-item"
-                    onClick={()=>pickCity(c)}>
-                    {c.city_name}, {c.province}
-                  </button>
-                ))}
-              </div>
-            )}
-            {!FN_SEARCH_CITY && (
-              <p className="ship-msg err">
-                ⚠️ Fitur ongkir RajaOngkir belum aktif. Admin perlu deploy Cloud Function & isi URL di pengaturan.
-              </p>
-            )}
-            {loadingShip && <p className="ship-msg">⏳ Menghitung ongkos kirim…</p>}
-            {shipError && <p className="ship-msg err">{shipError}</p>}
-            {shipOptions.length>0 && (
-              <div className="ship-options">
-                {shipOptions.map((o,i)=>(
-                  <button key={i} type="button"
-                    className={`ship-option${shipSelected===o?" on":""}`}
-                    onClick={()=>setShipSelected(o)}>
-                    <div>
-                      <strong>{o.courier} {o.service}</strong>
-                      <p>{o.description} · Estimasi {o.etd} hari</p>
-                    </div>
-                    <span>{fRp(o.cost)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ─── Jika kurir manual ────────────────────────────────────────── */}
-        {isManualCourier(courierType) && (
-          <div className="fg">
-            {loadingRates ? (
-              <p className="ship-msg">⏳ Memuat tarif…</p>
-            ) : (
-              <>
-                {manualRates[courierType] !== undefined ? (
-                  <div className="ship-manual-note ready">
-                    <p>✅ Ongkir <strong>{getCourierLabel(courierType)}</strong> sudah ditentukan:</p>
-                    <p className="ship-manual-price">{fRp(manualRates[courierType])}</p>
-                  </div>
-                ) : distance && ratePerKm>0 ? (
-                  <div className="ship-manual-note ready">
-                    <p>📏 Jarak <strong>{distance.toFixed(1)} km</strong> × Rp{ratePerKm}/km</p>
-                    <p className="ship-manual-price">{fRp(distance * ratePerKm)}</p>
-                    {distanceMethod==="ors" && <span style={{fontSize:".7rem",color:"var(--green)"}}>✅ dihitung dengan ORS</span>}
-                  </div>
-                ) : (
-                  <div className="ship-manual-note">
-                    <p>Kamu memilih <strong>{getCourierLabel(courierType)}</strong>.</p>
-                    <p>Ongkos kirim belum ditentukan. {!adminCoords || ratePerKm===0 ? "Admin belum mengatur tarif per km & lokasi toko." : "Aktifkan GPS untuk hitung jarak."}</p>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
         <div className="ord-info">
-          <p>🚚 Pengiriman via <strong>berbagai ekspedisi</strong> sesuai pilihan</p>
+          <p>🚚 Pengiriman via <strong>Gojek / Grab / SiCepat / JNE</strong></p>
           <p>💳 Pembayaran QRIS setelah pesanan dikonfirmasi</p>
         </div>
-
-        {/* ─── Ringkasan Total ───────────────────────────────────────────── */}
-        <div className="ord-total-box">
-          <div className="ord-total-row"><span>Harga produk</span><span>{fRp(p.price)}</span></div>
-          {distance!==null && isManualCourier(courierType) && (
-            <div className="ord-total-row">
-              <span>Jarak (km)</span>
-              <span>{distance.toFixed(1)} {distanceMethod==="ors" && <span className="ors-badge">ORS</span>}</span>
-            </div>
-          )}
-          <div className="ord-total-row">
-            <span>Ongkos kirim</span>
-            <span>
-              {isRajaOngkirCourier(courierType)
-                ? (previewShipping>0?fRp(previewShipping):"—")
-                : manualRates[courierType] !== undefined ? fRp(manualRates[courierType])
-                : distance && ratePerKm>0 ? fRp(distance*ratePerKm)
-                : "—"}
-            </span>
-          </div>
-          <div className="ord-total-row total">
-            <span>Total{isManualCourier(courierType) && previewShipping===0 ? "*" : ""}</span>
-            <span>{fRp(totalWithShipping)}</span>
-          </div>
-          {isManualCourier(courierType) && previewShipping===0 && (
-            <p className="ord-total-note">*Ongkir akan dikonfirmasi admin</p>
-          )}
-        </div>
-
         <button type="button" className="btn-order" onClick={submitOrder} disabled={submitting}>
           {submitting?"⏳ Mengirim…":"📦 Buat Pesanan"}
         </button>
@@ -733,106 +366,105 @@ function UserChatPanel() {
   const [confirming, setConfirming] = useState(false);
   const chatRef = useRef(null);
 
-  useEffect(()=>{ setMyOrders(lsGet()); },[]);
+  useEffect(() => { setMyOrders(lsGet()); }, []);
 
-  useEffect(()=>{
-    const orders = lsGet();
-    if (orders.length===0) return;
-    const unsubs = orders
-      .filter(order=>order.orderId!==selOrd)
-      .map(order=>{
-        return onSnapshot(doc(db,"orders",order.orderId), snap=>{
-          if (snap.exists()) {
-            const newStatus = snap.data().status;
-            const newBC     = snap.data().buyerConfirmed || false;
-            const arr = lsGet().map(o=>
-              o.orderId===order.orderId ? {...o, status:newStatus, buyerConfirmed:newBC} : o
-            );
-            lsSet(arr);
-            setMyOrders(arr);
-          } else {
-            const arr = lsGet().filter(o=>o.orderId!==order.orderId);
-            lsSet(arr); setMyOrders(arr);
+  useEffect(() => {
+    if (myOrders.length === 0) return;
+    const unsubs = myOrders.map(order => {
+      return onSnapshot(doc(db, "orders", order.orderId), snap => {
+        if (snap.exists()) {
+          const data = snap.data();
+          const newStatus = data.status || "pending";
+          const newBC = data.buyerConfirmed || false;
+          const arr = lsGet().map(o =>
+            o.orderId === order.orderId ? { ...o, status: newStatus, buyerConfirmed: newBC } : o
+          );
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd === order.orderId) {
+            setOrdData(prev => ({ ...prev, ...data, status: newStatus, buyerConfirmed: newBC }));
           }
-        });
+        } else {
+          const arr = lsGet().filter(o => o.orderId !== order.orderId);
+          lsSet(arr);
+          setMyOrders([...arr]);
+          if (selOrd === order.orderId) setSelOrd(null);
+        }
       });
-    return ()=>unsubs.forEach(u=>u());
-  },[selOrd]);
-
-  useEffect(()=>{
-    if (!selOrd) return;
-    const q=query(collection(db,`orders/${selOrd}/chats`),orderBy("createdAt","asc"));
-    const u1=onSnapshot(q,snap=>{
-      setMsgs(snap.docs.map(d=>({id:d.id,...d.data()})));
-      setTimeout(()=>chatRef.current?.scrollTo(0,99999),120);
     });
-    const u2=onSnapshot(doc(db,"orders",selOrd),snap=>{
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myOrders.map(o => o.orderId).join(","), selOrd]);
+
+  useEffect(() => {
+    if (!selOrd) return;
+    const q = query(collection(db, `orders/${selOrd}/chats`), orderBy("createdAt", "asc"));
+    const u1 = onSnapshot(q, snap => {
+      setMsgs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setTimeout(() => chatRef.current?.scrollTo(0, 99999), 120);
+    });
+    const u2 = onSnapshot(doc(db, "orders", selOrd), snap => {
       if (snap.exists()) {
         const data = snap.data();
-        setOrdData(data);
-        const arr = lsGet().map(o=>
-          o.orderId===selOrd ? {...o, status:data.status, buyerConfirmed:data.buyerConfirmed||false} : o
+        setOrdData({ id: snap.id, ...data });
+        const arr = lsGet().map(o =>
+          o.orderId === selOrd ? { ...o, status: data.status, buyerConfirmed: data.buyerConfirmed || false } : o
         );
         lsSet(arr);
-        setMyOrders(arr);
+        setMyOrders([...arr]);
       } else {
         setSelOrd(null);
       }
     });
-    return ()=>{ u1(); u2(); };
-  },[selOrd]);
+    return () => { u1(); u2(); };
+  }, [selOrd]);
 
   const sendChat = async () => {
-    if (!txt.trim()||!selOrd) return;
+    if (!txt.trim() || !selOrd) return;
     try {
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"buyer", text:txt.trim(), createdAt:serverTimestamp(),
+      await addDoc(collection(db, `orders/${selOrd}/chats`), {
+        from: "buyer", text: txt.trim(), createdAt: serverTimestamp(),
       });
       setTxt("");
-    } catch(e){ alert("Gagal: "+e.message); }
+    } catch (e) { alert("Gagal: " + e.message); }
   };
 
   const handleBuyerConfirm = async () => {
     if (!selOrd || confirming) return;
     setConfirming(true);
     try {
-      await updateDoc(doc(db,"orders",selOrd),{
+      await updateDoc(doc(db, "orders", selOrd), {
+        status: "done",
         buyerConfirmed: true,
         buyerConfirmedAt: serverTimestamp(),
       });
-      await addDoc(collection(db,`orders/${selOrd}/chats`),{
-        from:"system",
-        text:"✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
-        createdAt:serverTimestamp(),
+      await addDoc(collection(db, `orders/${selOrd}/chats`), {
+        from: "system",
+        text: "✅ Buyer mengonfirmasi pesanan telah diterima dengan baik. Terima kasih! 💛",
+        createdAt: serverTimestamp(),
       });
-      const orderSnap = await getDoc(doc(db,"orders",selOrd));
-      const order = orderSnap.data();
-      await addDoc(collection(db,"notifications"),{
-        type:"buyer_confirmed",
-        orderId: selOrd,
-        message:`✅ Buyer konfirmasi terima: ${order?.productName||"pesanan"}`,
-        detail:`Pesanan dari ${order?.buyerName||"buyer"} sudah diterima.`,
-        read:false,
-        createdAt:serverTimestamp(),
-      });
-    } catch(e){
-      alert("Gagal konfirmasi: "+e.message);
-    }
+      const arr = lsGet().map(o =>
+        o.orderId === selOrd ? { ...o, status: "done", buyerConfirmed: true } : o
+      );
+      lsSet(arr);
+      setMyOrders([...arr]);
+      setOrdData(prev => ({ ...prev, status: "done", buyerConfirmed: true }));
+      alert("🎉 Terima kasih sudah berbelanja di Parevie!\nJika butuh bantuan, hubungi kami via WhatsApp.");
+    } catch (e) { alert("Gagal konfirmasi: " + e.message); }
     setConfirming(false);
   };
 
-  const SL = {pending:"⏳ Menunggu konfirmasi",paid_pending_confirm:"💰 Pembayaran diverifikasi",
-    confirmed:"✅ Dikonfirmasi",shipped:"🚚 Dalam pengiriman",done:"🎉 Selesai",cancelled:"❌ Dibatalkan"};
-  const SC = {pending:"#c9a84c",paid_pending_confirm:"#7c6af5",confirmed:"#4caf82",
-    shipped:"#29b6f6",done:"#4caf82",cancelled:"#e05a5a"};
-
+  const SL = { pending: "⏳ Menunggu konfirmasi", paid_pending_confirm: "💰 Pembayaran diverifikasi",
+    confirmed: "✅ Dikonfirmasi", shipped: "🚚 Dalam pengiriman", done: "🎉 Selesai", cancelled: "❌ Dibatalkan" };
+  const SC = { pending: "#c9a84c", paid_pending_confirm: "#7c6af5", confirmed: "#4caf82",
+    shipped: "#29b6f6", done: "#4caf82", cancelled: "#e05a5a" };
   const WA_ADMIN = "6281328046768";
 
-  if (myOrders.length===0) return (
+  if (myOrders.length === 0) return (
     <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
-      <div className="empty" style={{padding:"40px 16px"}}>
-        <p style={{fontSize:"2rem"}}>🛒</p><h3>Belum ada pesanan</h3>
+      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
+      <div className="empty" style={{ padding: "40px 16px" }}>
+        <p style={{ fontSize: "2rem" }}>🛒</p><h3>Belum ada pesanan</h3>
         <p>Pesanan akan muncul setelah checkout</p>
       </div>
     </div>
@@ -840,23 +472,23 @@ function UserChatPanel() {
 
   if (!selOrd) return (
     <div className="acp">
-      <h3 className="acp-ttl"><Ic.Chat/> Pesanan Saya</h3>
+      <h3 className="acp-ttl"><Ic.Chat /> Pesanan Saya</h3>
       <div className="acp-list">
-        {myOrders.map(o=>{
-          const status = o.status||"pending";
+        {myOrders.map(o => {
+          const status = o.status || "pending";
           return (
-            <div key={o.orderId} className="acp-item" onClick={()=>setSelOrd(o.orderId)}>
-              <img src={o.productImg||IMG_PH} alt={o.productName}
-                style={{width:48,height:48,objectFit:"cover",borderRadius:8,flexShrink:0}}
-                onError={e=>{e.target.src=IMG_PH;}}/>
-              <div style={{flex:1,minWidth:0}}>
+            <div key={o.orderId} className="acp-item" onClick={() => setSelOrd(o.orderId)}>
+              <img src={o.productImg || IMG_PH} alt={o.productName}
+                style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 8, flexShrink: 0 }}
+                onError={e => { e.target.src = IMG_PH; }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="acp-pname">{o.productName}</p>
                 <p className="acp-buyer">{fRp(o.price)} · #{o.orderId.slice(-6).toUpperCase()}</p>
-                <span style={{fontSize:".7rem",fontWeight:600,color:SC[status]||"#888"}}>
-                  {SL[status]||status}
+                <span style={{ fontSize: ".7rem", fontWeight: 600, color: SC[status] || "#888" }}>
+                  {SL[status] || status}
                 </span>
               </div>
-              <span style={{color:"var(--gold)",fontSize:".8rem"}}>Chat →</span>
+              <span style={{ color: "var(--gold)", fontSize: ".8rem" }}>Chat →</span>
             </div>
           );
         })}
@@ -864,38 +496,37 @@ function UserChatPanel() {
     </div>
   );
 
-  const status      = ordData?.status||"pending";
-  const lsOrder     = myOrders.find(o=>o.orderId===selOrd);
-  const buyerConfirmed = ordData?.buyerConfirmed || lsOrder?.buyerConfirmed || false;
-  const found       = lsOrder;
+  const status = ordData?.status || "pending";
+  const buyerConfirmed = ordData?.buyerConfirmed || false;
 
   return (
     <div className="chat-wrap">
       <div className="chat-hdr">
-        <button type="button" onClick={()=>setSelOrd(null)} className="btn-back-chat">←</button>
-        <Ic.Chat/> <span>{found?.productName}</span>
+        <button type="button" onClick={() => setSelOrd(null)} className="btn-back-chat">←</button>
+        <Ic.Chat /> <span>{ordData?.productName || "Pesanan"}</span>
       </div>
       <div className="status-bar" style={{
-        background:SC[status]+"22",borderColor:SC[status]+"55",color:SC[status]}}>
-        {SL[status]||status}
+        background: SC[status] + "22", borderColor: SC[status] + "55", color: SC[status]
+      }}>
+        {SL[status] || status}
       </div>
 
-      {status==="done" && !buyerConfirmed && (
+      {status === "shipped" && !buyerConfirmed && (
         <div className="buyer-confirm-box">
           <button
             className="btn-buyer-confirm"
             onClick={handleBuyerConfirm}
             disabled={confirming}>
-            {confirming?"⏳ Mengonfirmasi…":"✅ Saya Sudah Menerima Pesanan"}
+            {confirming ? "⏳ Mengonfirmasi…" : "✅ Saya Sudah Menerima Pesanan"}
           </button>
         </div>
       )}
 
-      {status==="done" && buyerConfirmed && (
+      {status === "done" && buyerConfirmed && (
         <div className="buyer-thankyou-box">
           <p className="buyer-thankyou-title">🎉 Terima Kasih!</p>
           <p className="buyer-thankyou-sub">
-            Pesanan kamu sudah kami tandai selesai.<br/>
+            Pesanan kamu sudah kami tandai selesai.<br />
             Semoga puas dengan produk Parevie 💛
           </p>
           <a
@@ -903,183 +534,33 @@ function UserChatPanel() {
             target="_blank"
             rel="noopener noreferrer"
             className="btn-wa-help">
-            <Ic.WA/> Butuh Bantuan? Hubungi Kami
+            <Ic.WA /> Butuh Bantuan? Hubungi Kami
           </a>
         </div>
       )}
 
       <div className="chat-msgs" ref={chatRef}>
-        {msgs.map(m=>(
-          <div key={m.id} className={`cmsg ${m.from==="buyer"?"right":m.from==="system"?"center":"left"}`}>
-            {m.from==="system"
-              ?<div className="csys">{m.text}</div>
-              :<><div className={`cbubble ${m.from==="buyer"?"bubble-buyer":"bubble-admin"}`}>{m.text}</div>
-                <span className="ctime">{m.from==="buyer"?"Saya":"👤 Admin"}</span></>}
+        {msgs.map(m => (
+          <div key={m.id} className={`cmsg ${m.from === "buyer" ? "right" : m.from === "system" ? "center" : "left"}`}>
+            {m.from === "system"
+              ? <div className="csys">{m.text}</div>
+              : <><div className={`cbubble ${m.from === "buyer" ? "bubble-buyer" : "bubble-admin"}`}>{m.text}</div>
+                <span className="ctime">{m.from === "buyer" ? "Saya" : "👤 Admin"}</span></>}
           </div>
         ))}
       </div>
       <div className="chat-inp-row">
-        <input className="finput" style={{flex:1}} placeholder="Ketik pesan ke admin…"
-          value={txt} onChange={e=>setTxt(e.target.value)}
-          onKeyDown={e=>e.key==="Enter"&&sendChat()}/>
-        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send/></button>
-      </div>
-    </div>
-  );
-}
-
-// ─── ADMIN: Atur Tarif (hanya untuk kurir manual) ──────────────────────
-function ShippingRatesAdmin({onClose}) {
-  const MANUAL_COURIERS = [
-    { key: "gosend", label: "GoSend (Gojek)", icon: "🛵" },
-    { key: "grab", label: "Grab Express", icon: "🟢" },
-    { key: "lalamove", label: "Lalamove", icon: "🚚" },
-    { key: "kurir_toko", label: "Kurir Toko Sendiri", icon: "🏪" }
-  ];
-  const [rates,      setRates]      = useState({});
-  const [ratePerKm,  setRatePerKm]  = useState(0);
-  const [adminLat,   setAdminLat]   = useState("");
-  const [adminLng,   setAdminLng]   = useState("");
-  const [orsApiKey,  setOrsApiKey]  = useState("");
-  const [loading,    setLoading]    = useState(true);
-  const [saving,     setSaving]     = useState(false);
-  const [saved,      setSaved]      = useState(false);
-
-  useEffect(()=>{
-    const unsub = onSnapshot(doc(db,"settings","shippingRates"), snap=>{
-      const data = snap.data();
-      if(data){
-        setRates(data.rates||{});
-        setRatePerKm(data.ratePerKm||0);
-        if(data.adminLocation){
-          setAdminLat(data.adminLocation.lat?.toString()||"");
-          setAdminLng(data.adminLocation.lng?.toString()||"");
-        }
-        setOrsApiKey(data.orsApiKey||"");
-      }
-      setLoading(false);
-    }, ()=>setLoading(false));
-    return ()=>unsub();
-  },[]);
-
-  const updateRate = (key, value) => {
-    setRates(prev=>({...prev, [key]: value===""?undefined:Number(value)}));
-    setSaved(false);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const clean = {};
-      Object.entries(rates).forEach(([k,v])=>{
-        if (typeof v==="number" && !isNaN(v)) clean[k]=v;
-      });
-      await updateDoc(doc(db,"settings","shippingRates"),{
-        rates: clean,
-        ratePerKm: Number(ratePerKm) || 0,
-        adminLocation: {
-          lat: parseFloat(adminLat) || 0,
-          lng: parseFloat(adminLng) || 0
-        },
-        orsApiKey: orsApiKey.trim(),
-        updatedAt: serverTimestamp(),
-      }).catch(async ()=>{
-        const { setDoc } = await import("firebase/firestore");
-        await setDoc(doc(db,"settings","shippingRates"),{
-          rates: clean,
-          ratePerKm: Number(ratePerKm) || 0,
-          adminLocation: {
-            lat: parseFloat(adminLat) || 0,
-            lng: parseFloat(adminLng) || 0
-          },
-          orsApiKey: orsApiKey.trim(),
-          updatedAt: serverTimestamp()
-        });
-      });
-      setSaved(true);
-      setTimeout(()=>setSaved(false),2500);
-    } catch(e){ alert("Gagal menyimpan tarif: "+e.message); }
-    setSaving(false);
-  };
-
-  return (
-    <div className="acp">
-      <h3 className="acp-ttl">🚚 Atur Tarif Kurir Instant</h3>
-      <p className="ship-admin-desc">
-        Tarif flat untuk kurir instant (Gojek, Grab, Lalamove, dsb.) atau gunakan tarif per km + jarak akurat dengan ORS.
-        <br/><span style={{color:"var(--text3)",fontSize:".75rem"}}>⚠️ Ekspedisi reguler (JNE, TIKI, dll.) ongkir otomatis via RajaOngkir, tidak perlu diatur.</span>
-      </p>
-      {loading ? (
-        <p className="chat-empty">Memuat tarif…</p>
-      ) : (
-        <>
-          <div className="ship-rate-row" style={{marginBottom:12}}>
-            <span className="ship-rate-label">📏 Tarif per km (Rp)</span>
-            <div className="ship-rate-input-wrap">
-              <span>Rp</span>
-              <input type="number" className="finput ship-rate-input"
-                placeholder="2000" value={ratePerKm}
-                onChange={e=>{setRatePerKm(e.target.value); setSaved(false);}}/>
-            </div>
-          </div>
-          <div className="ship-rate-row" style={{marginBottom:12}}>
-            <span className="ship-rate-label">📍 Koordinat Toko</span>
-            <div style={{display:"flex", gap:8, flex:1, flexDirection:"column"}}>
-              <div style={{display:"flex", gap:8}}>
-                <input type="text" className="finput" placeholder="-7.69382 (pakai minus untuk selatan)"
-                  value={adminLat} onChange={e=>{setAdminLat(e.target.value); setSaved(false);}}/>
-                <input type="text" className="finput" placeholder="110.574111"
-                  value={adminLng} onChange={e=>{setAdminLng(e.target.value); setSaved(false);}}/>
-              </div>
-              <p style={{fontSize:".7rem",color:"var(--red)",marginTop:0}}>
-                ⚠️ Pastikan latitude pakai tanda MINUS jika di selatan khatulistiwa (contoh: -7.69382).
-              </p>
-            </div>
-          </div>
-
-          <div className="ship-rate-row" style={{marginBottom:12}}>
-            <span className="ship-rate-label">🔑 ORS API Key <Ic.Ors/></span>
-            <div style={{flex:1}}>
-              <input type="password" className="finput" placeholder="Masukkan API Key OpenRouteService"
-                value={orsApiKey} onChange={e=>{setOrsApiKey(e.target.value); setSaved(false);}}/>
-              <p style={{fontSize:".7rem",color:"var(--text3)",marginTop:4}}>
-                Dapatkan gratis di <a href="https://openrouteservice.org/" target="_blank" rel="noopener noreferrer" style={{color:"var(--gold)"}}>openrouteservice.org</a>.
-                Kosongkan untuk menggunakan estimasi garis lurus (haversine).
-              </p>
-            </div>
-          </div>
-
-          <p style={{fontSize:".7rem",color:"var(--text3)",marginBottom:12}}>
-            Koordinat toko digunakan untuk menghitung jarak ke buyer. Dapatkan dari Google Maps (klik kanan → koordinat).
-          </p>
-
-          <div className="ship-rates-list">
-            {MANUAL_COURIERS.map(c=>(
-              <div key={c.key} className="ship-rate-row">
-                <span className="ship-rate-label">{c.icon} {c.label}</span>
-                <div className="ship-rate-input-wrap">
-                  <span>Rp</span>
-                  <input type="number" className="finput ship-rate-input"
-                    placeholder="0" value={rates[c.key]??""}
-                    onChange={e=>updateRate(c.key, e.target.value)}/>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-      <div className="form-acts" style={{marginTop:16}}>
-        <button type="button" className="btn-cancel" onClick={onClose}>Tutup</button>
-        <button type="button" className="btn-save" onClick={handleSave} disabled={saving}>
-          {saving?"Menyimpan…":saved?"✅ Tersimpan!":"Simpan Tarif & ORS"}
-        </button>
+        <input className="finput" style={{ flex: 1 }} placeholder="Ketik pesan ke admin…"
+          value={txt} onChange={e => setTxt(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && sendChat()} />
+        <button type="button" className="btn-send" onClick={sendChat}><Ic.Send /></button>
       </div>
     </div>
   );
 }
 
 // ─── ADMIN LOGIN ──────────────────────────────────────────────────────────
-function AdminLogin({ onLogin }) {
+function AdminLogin({onLogin}) {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
@@ -1163,10 +644,22 @@ function AdminChatPanel({onLogout}) {
 
   const updStatus = async (s) => {
     if (!selOrd) return;
+    const current = selOrd.status;
+    const allowedMap = {
+      pending:        ['confirmed'],
+      paid_pending_confirm: ['confirmed'],
+      confirmed:      ['shipped'],
+      shipped:        ['done'],
+      done:           [],
+      cancelled:      []
+    };
+    if (!allowedMap[current]?.includes(s)) {
+      return;
+    }
     try {
       await updateDoc(doc(db,"orders",selOrd.id),{status:s,updatedAt:serverTimestamp()});
       setSelOrd(o=>({...o,status:s}));
-      if (s==="confirmed"&&selOrd.productId) {
+      if (s==="confirmed" && selOrd.productId) {
         try {
           const prodRef=doc(db,"products",selOrd.productId);
           const prodSnap=await getDoc(prodRef);
@@ -1207,6 +700,20 @@ function AdminChatPanel({onLogout}) {
   const SL={pending:"Pending",paid_pending_confirm:"Sudah Bayar",
     confirmed:"Konfirmasi",shipped:"Kirim",done:"Selesai",cancelled:"Batal"};
 
+  const isStatusAllowed = (targetStatus) => {
+    const current = selOrd?.status || "pending";
+    if (current === "pending" || current === "paid_pending_confirm") {
+      return targetStatus === "confirmed";
+    }
+    if (current === "confirmed") {
+      return targetStatus === "shipped";
+    }
+    if (current === "shipped") {
+      return targetStatus === "done";
+    }
+    return false;
+  };
+
   return (
     <div className="acp">
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -1245,44 +752,48 @@ function AdminChatPanel({onLogout}) {
             <p>👤 {selOrd.buyerName} · 📱 {selOrd.buyerPhone}</p>
             <p>📍 {selOrd.address}</p>
             {selOrd.note&&<p>📝 {selOrd.note}</p>}
-            {selOrd.courierLabel&&(
-              <p>🚚 Kurir: <strong>{selOrd.courierLabel}</strong>
-                {selOrd.courierType==="jne" && selOrd.shippingCost>0 && ` · Ongkir: ${fRp(selOrd.shippingCost)}`}
-                {selOrd.distance && ` · Jarak ${selOrd.distance.toFixed(1)} km (${selOrd.distanceMethod||"estimasi"})`}
-              </p>
-            )}
-            {selOrd.shippingPending&&(
-              <p className="acp-ship-alert">⚠️ Ongkir belum dihitung — infokan ke buyer via chat</p>
-            )}
             {selOrd.buyerConfirmed&&<p style={{color:"var(--green)",fontWeight:600}}>✅ Buyer sudah konfirmasi terima</p>}
           </div>
+
           <div className="acp-status-row">
-            {Object.entries(SL).map(([k,v])=>{
-              const cur = selOrd.status || "pending";
-              let disabled = true;
-              if (k === cur) {
-                disabled = false;
-              } else if (k === "cancelled") {
-                disabled = (cur === "done" || cur === "cancelled");
-              } else if (cur === "pending" && k === "paid_pending_confirm") {
-                disabled = false;
-              } else if (cur === "paid_pending_confirm" && k === "confirmed") {
-                disabled = false;
-              } else if (cur === "confirmed" && k === "shipped") {
-                disabled = false;
-              } else if (cur === "shipped" && k === "done") {
-                disabled = false;
-              }
-              return (
-                <button key={k} type="button"
-                  className={`btn-status${selOrd.status===k?" on":""}`}
-                  style={selOrd.status===k?{background:SC[k],borderColor:SC[k]}:{}}
-                  onClick={()=>updStatus(k)}
-                  disabled={disabled}>{v}
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="confirmed"?" on":""}`}
+              style={selOrd.status==="confirmed"?{background:SC.confirmed,borderColor:SC.confirmed}:{}}
+              onClick={()=>updStatus("confirmed")}
+              disabled={!isStatusAllowed("confirmed")}
+            >
+              Konfirmasi
+            </button>
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="shipped"?" on":""}`}
+              style={selOrd.status==="shipped"?{background:SC.shipped,borderColor:SC.shipped}:{}}
+              onClick={()=>updStatus("shipped")}
+              disabled={!isStatusAllowed("shipped")}
+            >
+              Kirim
+            </button>
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="done"?" on":""}`}
+              style={selOrd.status==="done"?{background:SC.done,borderColor:SC.done}:{}}
+              onClick={()=>updStatus("done")}
+              disabled={!isStatusAllowed("done")}
+            >
+              Selesai
+            </button>
+            <button
+              type="button"
+              className={`btn-status${selOrd.status==="cancelled"?" on":""}`}
+              style={selOrd.status==="cancelled"?{background:SC.cancelled,borderColor:SC.cancelled}:{}}
+              onClick={()=>updStatus("cancelled")}
+              disabled={selOrd.status!=="pending" && selOrd.status!=="paid_pending_confirm"}
+            >
+              Batal
+            </button>
           </div>
+
           <div className="chat-msgs" ref={chatRef} style={{height:220}}>
             {msgs.map(m=>(
               <div key={m.id} className={`cmsg ${m.from==="admin"?"right":m.from==="system"?"center":"left"}`}>
@@ -1364,68 +875,178 @@ function ProductDetail({p, onOrder}) {
   );
 }
 
-// ─── Product Form ─────────────────────────────────────────────────────────
+// ─── PRODUCT FORM (DIPERBAIKI - FIX UPLOAD) ─────────────────────────────
 function ProductForm({initial,onSave,onCancel,saving}) {
   const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
   const [f,setF]=useState(initial?{...blank,...initial}:blank);
-  const [iu,setIU]=useState(""); const [file,setFile]=useState(null);
-  const [prev,setPrev]=useState(getImg(initial||{})); const [up,setUp]=useState(false);
+  const [iu,setIU]=useState("");
+  const [file,setFile]=useState(null);
+  const [prev,setPrev]=useState(getImg(initial||{}));
+  const [up,setUp]=useState(false);
+  const [uploadError,setUploadError]=useState("");
+
   const ch=(k,v)=>setF(x=>({...x,[k]:v}));
+
   const submit=async()=>{
-    if(!f.name||!f.price) return alert("Nama & harga wajib!");
+    setUploadError("");
+    if(!f.name?.trim()) return alert("Nama produk wajib diisi!");
+    if(!f.price || Number(f.price)<=0) return alert("Harga wajib diisi dan harus lebih dari 0!");
+    
     let images=Array.isArray(f.images)?[...f.images]:[];
+    
     if(file){
       setUp(true);
       try{
-        const r=ref(storage,`products/${Date.now()}_${file.name}`);
-        await uploadBytes(r,file); const url=await getDownloadURL(r);
-        images=[url,...images.filter(i=>i!==url)];
-      }catch(e){alert("Upload gagal: "+e.message);setUp(false);return;}
+        console.log("📤 Mulai upload file:", file.name);
+        const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        console.log("✅ Upload selesai, snapshot:", snapshot);
+        const url = await getDownloadURL(snapshot.ref);
+        console.log("📥 Download URL:", url);
+        images = [url, ...images.filter(i => i !== url)];
+        setPrev(url);
+        setFile(null);
+      }catch(e){
+        console.error("❌ Upload gagal:", e);
+        setUploadError("Upload foto gagal: " + (e.message || "Unknown error"));
+        alert("Upload foto gagal: " + e.message + "\nCoba gunakan URL gambar atau upload ulang.");
+        setUp(false);
+        return;
+      }
       setUp(false);
     }
-    onSave({...f,price:Number(f.price),stock:Number(f.stock),rating:Number(f.rating),sold:Number(f.sold),images});
+
+    if(images.length===0){
+      const ok = window.confirm("Anda belum menambahkan foto. Lanjutkan tanpa foto?");
+      if(!ok) return;
+    }
+
+    try{
+      const data = {
+        ...f,
+        price: Number(f.price),
+        stock: Number(f.stock) || 0,
+        rating: Number(f.rating) || 0,
+        sold: Number(f.sold) || 0,
+        images: images,
+      };
+      await onSave(data);
+      setF(blank);
+      setPrev("");
+      setFile(null);
+      setIU("");
+      setUploadError("");
+    }catch(e){
+      console.error("❌ Gagal menyimpan produk:", e);
+      alert("Gagal menyimpan produk: " + e.message);
+    }
   };
+
+  const handleAddUrl = () => {
+    if(!iu.startsWith("http")) return alert("URL tidak valid. Harus dimulai dengan http");
+    const newImages = [...(Array.isArray(f.images)?f.images:[]), iu];
+    ch("images", newImages);
+    setPrev(iu);
+    setIU("");
+  };
+
+  const removeImage = (urlToRemove) => {
+    const newImages = (Array.isArray(f.images)?f.images:[]).filter(u => u !== urlToRemove);
+    ch("images", newImages);
+    if(newImages.length===0) setPrev("");
+    else setPrev(newImages[0]);
+  };
+
   return (
     <div className="pform">
       <h2 className="pform-ttl">{initial?.id?"Edit Produk":"Tambah Produk"}</h2>
+      
       <div className="pform-imgs">
-        <img src={prev||IMG_PH} alt="prev" className="pform-prev" onError={e=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
+        <img src={prev||IMG_PH} alt="prev" className="pform-prev" 
+          onError={e=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
         <div className="pform-imgctl">
-          <label className="btn-upload"><Ic.Upload/> Upload Foto
-            <input type="file" accept="image/*" hidden onChange={e=>{const fl=e.target.files[0];if(!fl)return;setFile(fl);setPrev(URL.createObjectURL(fl));}}/>
+          <label className="btn-upload">
+            <Ic.Upload/> {file ? `📎 ${file.name}` : "Upload Foto"}
+            <input type="file" accept="image/*" hidden 
+              onChange={e=>{
+                const fl=e.target.files[0];
+                if(!fl) return;
+                console.log("📎 File dipilih:", fl.name, fl.size);
+                setFile(fl);
+                setPrev(URL.createObjectURL(fl));
+                setUploadError("");
+              }}
+            />
           </label>
+          {file && (
+            <button type="button" className="btn-cancel" style={{padding:"2px 8px",fontSize:".7rem"}}
+              onClick={()=>{setFile(null); setPrev(getImg(initial||{}));}}>
+              Batal Pilih File
+            </button>
+          )}
           <div className="url-row">
-            <input className="finput" placeholder="atau paste URL…" value={iu} onChange={e=>setIU(e.target.value)}
-              onKeyDown={e=>{if(e.key==="Enter"&&iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}/>
-            <button type="button" className="btn-addurl" onClick={()=>{if(iu.startsWith("http")){ch("images",[...(Array.isArray(f.images)?f.images:[]),iu]);setPrev(iu);setIU("");}}}>+</button>
+            <input className="finput" placeholder="atau paste URL gambar…" 
+              value={iu} onChange={e=>setIU(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&handleAddUrl()}
+            />
+            <button type="button" className="btn-addurl" onClick={handleAddUrl}>+</button>
           </div>
+          {uploadError && <p className="errmsg" style={{color:"var(--red)",fontSize:".75rem"}}>{uploadError}</p>}
+          {Array.isArray(f.images) && f.images.length>0 && (
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>
+              {f.images.map((url,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:4,
+                  background:"var(--bg3)",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>
+                  <span>🖼️ {url.length>30?url.slice(0,30)+"...":url}</span>
+                  <button type="button" onClick={()=>removeImage(url)}
+                    style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer"}}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+
       <div className="pform-grid">
-        <div className="fg"><label>Nama *</label><input className="finput" value={f.name} onChange={e=>ch("name",e.target.value)}/></div>
-        <div className="fg"><label>Kategori</label><input className="finput" value={f.category} onChange={e=>ch("category",e.target.value)}/></div>
+        <div className="fg"><label>Nama *</label>
+          <input className="finput" value={f.name} onChange={e=>ch("name",e.target.value)}/></div>
+        <div className="fg"><label>Kategori</label>
+          <input className="finput" value={f.category} onChange={e=>ch("category",e.target.value)}/></div>
         <div className="fg"><label>Gender</label>
           <select className="finput" value={f.gender} onChange={e=>ch("gender",e.target.value)}>
-            <option value="">—</option><option value="male">Male</option><option value="female">Female</option><option value="unisex">Unisex</option>
+            <option value="">—</option><option value="male">Male</option>
+            <option value="female">Female</option><option value="unisex">Unisex</option>
           </select></div>
-        <div className="fg"><label>Harga (Rp)*</label><input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
-        <div className="fg"><label>Stok</label><input type="number" className="finput" value={f.stock} onChange={e=>ch("stock",e.target.value)}/></div>
-        <div className="fg"><label>Rating</label><input type="number" step="0.1" min="0" max="5" className="finput" value={f.rating} onChange={e=>ch("rating",e.target.value)}/></div>
-        <div className="fg"><label>Terjual</label><input type="number" className="finput" value={f.sold} onChange={e=>ch("sold",e.target.value)}/></div>
-        <div className="fg"><label>Aroma</label><input className="finput" value={f.aroma||""} onChange={e=>ch("aroma",e.target.value)}/></div>
+        <div className="fg"><label>Harga (Rp)*</label>
+          <input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
+        <div className="fg"><label>Stok</label>
+          <input type="number" className="finput" value={f.stock} onChange={e=>ch("stock",e.target.value)}/></div>
+        <div className="fg"><label>Rating</label>
+          <input type="number" step="0.1" min="0" max="5" className="finput" 
+            value={f.rating} onChange={e=>ch("rating",e.target.value)}/></div>
+        <div className="fg"><label>Terjual</label>
+          <input type="number" className="finput" value={f.sold} onChange={e=>ch("sold",e.target.value)}/></div>
+        <div className="fg"><label>Aroma</label>
+          <input className="finput" value={f.aroma||""} onChange={e=>ch("aroma",e.target.value)}/></div>
       </div>
+
       <div className="fg" style={{marginBottom:12}}>
         <label>Deskripsi</label>
-        <textarea className="finput ftarea" rows={4} value={f.desc||""} onChange={e=>ch("desc",e.target.value)}/>
+        <textarea className="finput ftarea" rows={4} value={f.desc||""} 
+          onChange={e=>ch("desc",e.target.value)}/>
       </div>
+
       <div className="pform-checks">
-        <label className="chk"><input type="checkbox" checked={!!f.bestSeller} onChange={e=>ch("bestSeller",e.target.checked)}/> Best Seller</label>
-        <label className="chk"><input type="checkbox" checked={!!f.isActive} onChange={e=>ch("isActive",e.target.checked)}/> Aktif/Tampil</label>
+        <label className="chk"><input type="checkbox" checked={!!f.bestSeller} 
+          onChange={e=>ch("bestSeller",e.target.checked)}/> Best Seller</label>
+        <label className="chk"><input type="checkbox" checked={!!f.isActive} 
+          onChange={e=>ch("isActive",e.target.checked)}/> Aktif/Tampil</label>
       </div>
+
       <div className="form-acts">
         <button type="button" className="btn-cancel" onClick={onCancel}>Batal</button>
         <button type="button" className="btn-save" onClick={submit} disabled={saving||up}>
-          {up?"Uploading…":saving?"Menyimpan…":"Simpan"}
+          {up?"⏳ Uploading…":saving?"⏳ Menyimpan…":"Simpan"}
         </button>
       </div>
     </div>
@@ -1460,7 +1081,6 @@ export default function App() {
   const [isAdmin,      setIsAdmin]      = useState(false);
   const [showLogin,    setShowLogin]    = useState(false);
   const [showACP,      setShowACP]      = useState(false);
-  const [showShipRates,setShowShipRates]= useState(false);
   const [showMyOrders, setShowMyOrders] = useState(false);
   const [saving,       setSaving]       = useState(false);
   const [dark,         setDark]         = useState(true);
@@ -1514,13 +1134,21 @@ export default function App() {
   if(sort==="rating")     list=[...list].sort((a,b)=>(b.rating||0)-(a.rating||0));
   if(sort==="sold")       list=[...list].sort((a,b)=>(b.sold||0)-(a.sold||0));
 
-  const handleSave=async(data)=>{
+  const handleSave = async (data) => {
     setSaving(true);
-    try{
-      if(editP?.id){const{id,...r}=data;await updateDoc(doc(db,"products",editP.id),{...r,updatedAt:serverTimestamp()});}
-      else{await addDoc(collection(db,"products"),{...data,createdAt:serverTimestamp()});}
-      setShowForm(false);setEditP(null);
-    }catch(e){alert("Gagal simpan produk: "+e.message);}
+    try {
+      if (editP?.id) {
+        const { id, ...r } = data;
+        await updateDoc(doc(db, "products", editP.id), { ...r, updatedAt: serverTimestamp() });
+      } else {
+        await addDoc(collection(db, "products"), { ...data, createdAt: serverTimestamp() });
+      }
+      setShowForm(false);
+      setEditP(null);
+    } catch (e) {
+      console.error("❌ Gagal simpan produk:", e);
+      alert("Gagal simpan produk: " + e.message);
+    }
     setSaving(false);
   };
 
@@ -1533,7 +1161,6 @@ export default function App() {
 
   const closeMenu=()=>setMenuOpen(false);
   const handleLogout=()=>{ signOut(auth); setIsAdmin(false); setShowACP(false); };
-
   const myActiveOrders = lsGet().filter(o=>o.status&&!["done","cancelled"].includes(o.status)).length;
 
   return (
@@ -1582,9 +1209,6 @@ export default function App() {
                         <button type="button" className="dd-item" onClick={()=>{setShowACP(true);closeMenu();}}>
                           <Ic.Chat/> Pesanan {notifCnt>0&&<span className="dd-badge">{notifCnt}</span>}
                         </button>
-                        <button type="button" className="dd-item" onClick={()=>{setShowShipRates(true);closeMenu();}}>
-                          🚚 Atur Tarif Kirim & ORS
-                        </button>
                         <div className="dd-info">
                           <span>📦 {products.length} produk</span>
                           <span>⚠ {products.filter(p=>getStock(p)<10).length} stok tipis</span>
@@ -1606,6 +1230,7 @@ export default function App() {
         <section className="hero">
           <div className="hero-glow"/>
           <p className="hero-eye">Koleksi Parfum</p>
+          <p className="hero-sub">{list.length} produk tersedia</p>
         </section>
 
         <div className="cats">
@@ -1670,9 +1295,6 @@ export default function App() {
         <Modal open={showMyOrders}   onClose={()=>setShowMyOrders(false)}>
           <UserChatPanel/>
         </Modal>
-        <Modal open={showShipRates}  onClose={()=>setShowShipRates(false)}>
-          <ShippingRatesAdmin onClose={()=>setShowShipRates(false)}/>
-        </Modal>
         <Modal open={showACP}        onClose={()=>setShowACP(false)}>
           <AdminChatPanel onLogout={handleLogout}/>
         </Modal>
@@ -1712,7 +1334,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .hero{position:relative;overflow:hidden;padding:18px 16px 12px;text-align:center}
 .hero-glow{position:absolute;inset:0;background:var(--hero-glow);pointer-events:none}
 .hero-eye{display:inline-block;padding:3px 14px;border:1px solid var(--gold);border-radius:18px;color:var(--gold);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
-.cats{display:flex;justify-content:center;gap:6px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%;flex-wrap:wrap}
+.hero-sub{color:var(--text3);font-size:.84rem}
+.cats{display:flex;gap:6px;padding:8px 14px;overflow-x:auto;scrollbar-width:none;max-width:900px;margin:0 auto;width:100%}
 .cats::-webkit-scrollbar{display:none}
 .cat-btn{padding:6px 18px;border-radius:20px;border:1px solid var(--border);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:.82rem;font-weight:500;color:var(--text3);background:var(--bg3);white-space:nowrap;transition:all .2s;flex-shrink:0}
 .cat-btn:hover{border-color:var(--gold);color:var(--text2)}
@@ -1800,40 +1423,6 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .loc-msg.ok{color:var(--green)}
 .loc-msg.err{color:var(--red)}
 .ord-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.8rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-.courier-select{cursor:pointer}
-.ship-manual-note{padding:11px 13px;background:#7c6af514;border:1px solid #7c6af530;border-radius:10px;font-size:.8rem;color:var(--text2);line-height:1.7}
-.ship-manual-note strong{color:var(--accent)}
-.ship-manual-note.ready{background:#4caf8214;border-color:#4caf8230}
-.ship-manual-price{font-size:1.1rem;font-weight:700;color:var(--green);margin-top:4px}
-.ord-total-note{font-size:.7rem;color:var(--text3);margin-top:2px;font-style:italic}
-.ship-admin-desc{font-size:.8rem;color:var(--text3);line-height:1.6;margin-bottom:14px}
-.ship-rates-list{display:flex;flex-direction:column;gap:10px}
-.ship-rate-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:10px;border:1px solid var(--border)}
-.ship-rate-label{font-size:.85rem;color:var(--text);font-weight:500;flex:1}
-.ship-rate-input-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
-.ship-rate-input-wrap span{font-size:.8rem;color:var(--text3)}
-.ship-rate-input{width:100px;text-align:right;padding:7px 9px}
-.ship-section{position:relative}
-.ship-city-search{position:relative;display:flex;align-items:center}
-.ship-loading-dot{position:absolute;right:10px;font-size:.8rem}
-.ship-city-list{margin-top:4px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:160px;overflow-y:auto}
-.ship-city-item{display:block;width:100%;text-align:left;padding:9px 12px;border:none;background:transparent;color:var(--text2);font-size:.8rem;cursor:pointer;font-family:'DM Sans',sans-serif;border-bottom:1px solid var(--border)}
-.ship-city-item:last-child{border-bottom:none}
-.ship-city-item:hover{background:var(--bg2);color:var(--gold)}
-.ship-msg{font-size:.78rem;color:var(--text3);margin-top:6px}
-.ship-msg.err{color:var(--red)}
-.ship-options{display:flex;flex-direction:column;gap:6px;margin-top:8px}
-.ship-option{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--text2);transition:all .2s;text-align:left}
-.ship-option:hover{border-color:var(--gold)}
-.ship-option.on{border-color:var(--gold);background:#c9a84c14}
-.ship-option strong{font-size:.82rem;color:var(--text);display:block}
-.ship-option p{font-size:.72rem;color:var(--text3);margin-top:2px}
-.ship-option span{font-weight:700;color:var(--gold);font-size:.85rem;flex-shrink:0;margin-left:10px}
-.ord-total-box{padding:12px;background:var(--bg3);border-radius:10px;display:flex;flex-direction:column;gap:6px}
-.ord-total-row{display:flex;justify-content:space-between;font-size:.82rem;color:var(--text2)}
-.ord-total-row.total{padding-top:8px;border-top:1px solid var(--border);font-weight:700;font-size:.95rem;color:var(--text)}
-.ord-total-row.total span:last-child{color:var(--gold)}
-.ors-badge{background:#4caf8230;color:var(--green);font-size:.6rem;padding:1px 6px;border-radius:4px;margin-left:4px}
 .qris-head{display:flex;align-items:center;gap:8px;padding:16px 16px 0;font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--text)}
 .qris-body{padding:16px;text-align:center}
 .qris-amount{font-size:1.6rem;font-weight:700;color:var(--gold);margin-bottom:4px}
@@ -1891,12 +1480,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .btn-del-order{display:flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;border:1px solid #e05a5a44;background:transparent;color:var(--red);cursor:pointer;font-size:.78rem;font-family:'DM Sans',sans-serif}
 .btn-del-order:hover{background:#e05a5a18}
 .acp-order-info{padding:10px 12px;background:var(--bg3);border-radius:8px;font-size:.82rem;color:var(--text2);line-height:1.9;border-left:3px solid var(--gold)}
-.acp-ship-alert{color:var(--red);font-weight:600;background:#e05a5a14;padding:4px 8px;border-radius:6px;margin-top:4px}
 .acp-status-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:4px}
 .btn-status{padding:5px 10px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text3);font-size:.72rem;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;text-transform:capitalize}
 .btn-status:hover:not(:disabled){border-color:var(--gold);color:var(--gold)}
+.btn-status:disabled{opacity:0.4;cursor:not-allowed}
 .btn-status.on{color:#0d0d14;font-weight:700}
-.btn-status:disabled{opacity:.3;cursor:not-allowed;background:transparent!important;border-color:var(--border)!important;color:var(--text3)!important}
 .pform{padding:18px}
 .pform-ttl{font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:14px;color:var(--text)}
 .pform-imgs{display:flex;gap:10px;margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:10px;flex-wrap:wrap}
