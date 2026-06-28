@@ -136,7 +136,7 @@ function ProductCard({p, onSelect, isAdmin, onEdit, onDelete}) {
         )}
       </div>
       <div className="card-body">
-        <p className="card-cat"><Ic.Tag/> {normGender(p.gender)||p.category||"—"}</p>
+        <p className="card-cat"><Ic.Tag/> {normGender(p.gender)||p.size||"—"}</p>
         <h3 className="card-name">{p.name}</h3>
         {p.rating>0&&<Stars val={p.rating}/>}
         <div className="card-foot">
@@ -835,9 +835,19 @@ function AdminChatPanel({onLogout}) {
 // ─── Detail ───────────────────────────────────────────────────────────────
 function ProductDetail({p, onOrder}) {
   const [idx,setIdx]=useState(0);
-  const imgs=Array.isArray(p.images)?p.images.filter(i=>typeof i==="string"&&i.startsWith("http")):(p.image?[p.image]:[]);
-  const stok=getStock(p);
-  const src=imgs[idx]||IMG_PH;
+  // Ambil semua gambar yang valid
+  let imgs = [];
+  if (Array.isArray(p.images)) {
+    imgs = p.images.filter(i => typeof i === "string" && i.startsWith("http"));
+  } else if (typeof p.image === "string" && p.image.startsWith("http")) {
+    imgs = [p.image];
+  }
+  // Jika tidak ada gambar, pakai placeholder
+  if (imgs.length === 0) imgs = [IMG_PH];
+  
+  const stok = getStock(p);
+  const src = imgs[idx] || IMG_PH;
+
   return (
     <div className="detail">
       <div className="d-img-wrap">
@@ -845,7 +855,7 @@ function ProductDetail({p, onOrder}) {
           onError={(e)=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
         {stok===0&&<div className="sold-out-overlay lg">STOK HABIS</div>}
       </div>
-      {imgs.length>1&&(
+      {imgs.length > 1 && (
         <div className="d-thumbs">
           {imgs.map((u,i)=>(
             <img key={i} src={u} alt="" className={`d-thumb${i===idx?" on":""}`}
@@ -855,7 +865,7 @@ function ProductDetail({p, onOrder}) {
         </div>
       )}
       <div className="d-body">
-        <p className="card-cat"><Ic.Tag/> {normGender(p.gender)||p.category||"—"}</p>
+        <p className="card-cat"><Ic.Tag/> {normGender(p.gender)||p.size||"—"}</p>
         <h2 className="d-name">{p.name}</h2>
         {p.rating>0&&<Stars val={p.rating}/>}
         <p className="d-price">{fRp(p.price)}</p>
@@ -875,28 +885,38 @@ function ProductDetail({p, onOrder}) {
   );
 }
 
-// ─── PRODUCT FORM (PERBAIKAN TOTAL UPLOAD) ──────────────────────────────
-function ProductForm({initial,onSave,onCancel,saving}) {
-  const blank={name:"",category:"",gender:"",price:"",stock:"",desc:"",images:[],badge:"",bestSeller:false,isActive:true,rating:0,sold:0,aroma:""};
-  const [f,setF]=useState(initial?{...blank,...initial}:blank);
-  const [iu,setIU]=useState("");
-  const [file,setFile]=useState(null);
-  const [prev,setPrev]=useState(getImg(initial||{}));
-  const [up,setUp]=useState(false);
-  const [uploadError,setUploadError]=useState("");
-  const [uploadProgress,setUploadProgress]=useState(0);
-  const [uploadTask, setUploadTask] = useState(null);
+// ─── PRODUCT FORM (PERBAIKAN FINAL) ─────────────────────────────────────
+function ProductForm({initial, onSave, onCancel, saving}) {
+  const blank = {
+    name: "", size: "", gender: "", price: "", stock: "",
+    desc: "", images: [], badge: "", bestSeller: false,
+    isActive: true, rating: 0, sold: 0, aroma: ""
+  };
+  const [f, setF] = useState(initial ? { ...blank, ...initial } : blank);
+  const [iu, setIU] = useState("");
+  const [file, setFile] = useState(null);
+  const [prev, setPrev] = useState(getImg(initial || {}));
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
+  const [savedMessage, setSavedMessage] = useState("");
 
-  const ch=(k,v)=>setF(x=>({...x,[k]:v}));
+  const ch = (k, v) => setF(x => ({ ...x, [k]: v }));
+
+  // Reset pesan setelah 5 detik
+  useEffect(() => {
+    if (savedMessage) {
+      const timer = setTimeout(() => setSavedMessage(""), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [savedMessage]);
 
   const submit = async () => {
     setUploadError("");
-    setUploadProgress(0);
-    
-    if(!f.name?.trim()) return alert("Nama produk wajib diisi!");
-    if(!f.price || Number(f.price)<=0) return alert("Harga wajib diisi dan harus lebih dari 0!");
-    
-    // 1. Simpan produk dulu ke Firestore (tanpa gambar)
+    setSavedMessage("");
+    if (!f.name?.trim()) return alert("Nama produk wajib diisi!");
+    if (!f.price || Number(f.price) <= 0) return alert("Harga wajib diisi dan harus lebih dari 0!");
+
     const data = {
       ...f,
       price: Number(f.price),
@@ -905,59 +925,45 @@ function ProductForm({initial,onSave,onCancel,saving}) {
       sold: Number(f.sold) || 0,
       images: Array.isArray(f.images) ? f.images : [],
     };
-    
+
     let productId = null;
+    setUploading(true);
+    setUploadProgress(0);
     try {
-      // Jika edit, update dulu
+      // 1. Simpan produk dulu ke Firestore
       if (initial?.id) {
         const { id, ...r } = data;
         await updateDoc(doc(db, "products", initial.id), { ...r, updatedAt: serverTimestamp() });
         productId = initial.id;
-        console.log("✅ Produk diupdate, ID:", productId);
       } else {
         const docRef = await addDoc(collection(db, "products"), { ...data, createdAt: serverTimestamp() });
         productId = docRef.id;
-        console.log("✅ Produk ditambahkan, ID:", productId);
       }
-    } catch(e) {
-      console.error("❌ Gagal simpan produk:", e);
-      alert("Gagal menyimpan data produk: " + e.message);
-      return;
-    }
+      setUploadProgress(20);
 
-    // 2. Jika ada file, upload gambar
-    if (file) {
-      setUp(true);
-      setUploadProgress(10);
-      try {
+      // 2. Upload gambar jika ada
+      if (file) {
         const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
-        const uploadTaskInstance = uploadBytesResumable(storageRef, file);
-        setUploadTask(uploadTaskInstance);
-
+        const uploadTask = uploadBytesResumable(storageRef, file);
+        
         const url = await new Promise((resolve, reject) => {
-          uploadTaskInstance.on(
+          uploadTask.on(
             'state_changed',
             (snapshot) => {
               const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(Math.round(progress));
-              console.log(`Upload progress: ${Math.round(progress)}%`);
+              setUploadProgress(Math.round(progress * 0.7 + 20)); // 20-90%
             },
-            (error) => {
-              reject(error);
-            },
+            (error) => reject(error),
             async () => {
               try {
-                const downloadURL = await getDownloadURL(uploadTaskInstance.snapshot.ref);
+                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 resolve(downloadURL);
-              } catch(e) {
-                reject(e);
-              }
+              } catch (e) { reject(e); }
             }
           );
         });
 
-        console.log("📥 Download URL:", url);
-        // Update produk dengan URL gambar
+        setUploadProgress(95);
         const currentImages = Array.isArray(data.images) ? data.images : [];
         const newImages = [url, ...currentImages];
         await updateDoc(doc(db, "products", productId), {
@@ -967,116 +973,130 @@ function ProductForm({initial,onSave,onCancel,saving}) {
         setPrev(url);
         setFile(null);
         setUploadProgress(100);
-        alert("✅ Produk berhasil disimpan dengan foto!");
-      } catch(e) {
-        console.error("❌ Upload gagal:", e);
-        setUploadError("Upload foto gagal: " + (e.message || "Unknown error"));
-        // Produk sudah tersimpan, hanya fotonya yang gagal
-        const ok = window.confirm(
-          `Upload foto gagal: ${e.message}\n\n` +
-          `Produk sudah tersimpan, tapi tanpa foto.\n` +
-          `Klik "OK" untuk tetap menyimpan produk (tanpa foto),\n` +
-          `atau "Batal" untuk membatalkan (produk akan dihapus).`
-        );
-        if (!ok) {
-          // Hapus produk yang baru dibuat jika user batal
-          if (!initial?.id) {
-            try { await deleteDoc(doc(db, "products", productId)); } catch(e) {}
-          }
-          setUp(false);
-          setUploadProgress(0);
-          return;
-        }
-        // Lanjutkan, produk tetap tersimpan tanpa foto
       }
-      setUp(false);
-    } else {
-      // Tidak ada file, langsung selesai
-      alert("✅ Produk berhasil disimpan!");
-    }
 
-    // Reset form
-    setF(blank);
-    setPrev("");
-    setFile(null);
-    setIU("");
-    setUploadError("");
-    setUploadProgress(0);
-    setUploadTask(null);
-    // Panggil onSave untuk menutup modal (tapi produk sudah tersimpan di atas)
-    // Kita panggil onSave agar parent tahu dan tutup modal
-    onSave(data); // data ini sudah tidak dipakai, tapi untuk trigger close
+      // Selesai
+      setSavedMessage(initial?.id ? "✅ Produk berhasil diperbarui!" : "✅ Produk berhasil ditambahkan!");
+      setUploading(false);
+      // Reset form (tapi biarkan data tetap untuk edit jika diperlukan)
+      if (!initial?.id) {
+        setF(blank);
+        setPrev("");
+        setIU("");
+      }
+      // Panggil onSave untuk tutup modal setelah delay
+      setTimeout(() => {
+        onSave(data);
+      }, 1500);
+    } catch (e) {
+      console.error("❌ Gagal simpan produk:", e);
+      setUploadError("Gagal: " + e.message);
+      setUploading(false);
+      // Jika produk sudah tersimpan tapi upload gagal, tawarkan tetap simpan
+      if (productId && file) {
+        const ok = window.confirm(
+          `Upload foto gagal: ${e.message}\n\nProduk sudah tersimpan tanpa foto.\nKlik OK untuk tetap menyimpan, atau Batal untuk menghapus produk.`
+        );
+        if (!ok && !initial?.id) {
+          try { await deleteDoc(doc(db, "products", productId)); } catch (e) {}
+        } else {
+          setSavedMessage("⚠️ Produk tersimpan, tapi tanpa foto.");
+          setTimeout(() => onSave(data), 1500);
+        }
+      }
+    }
   };
 
   const handleAddUrl = () => {
-    if(!iu.startsWith("http")) return alert("URL tidak valid. Harus dimulai dengan http");
-    const newImages = [...(Array.isArray(f.images)?f.images:[]), iu];
+    if (!iu.startsWith("http")) return alert("URL tidak valid. Harus dimulai dengan http");
+    const newImages = [...(Array.isArray(f.images) ? f.images : []), iu];
     ch("images", newImages);
     setPrev(iu);
     setIU("");
   };
 
   const removeImage = (urlToRemove) => {
-    const newImages = (Array.isArray(f.images)?f.images:[]).filter(u => u !== urlToRemove);
+    const newImages = (Array.isArray(f.images) ? f.images : []).filter(u => u !== urlToRemove);
     ch("images", newImages);
-    if(newImages.length===0) setPrev("");
+    if (newImages.length === 0) setPrev("");
     else setPrev(newImages[0]);
   };
 
   return (
     <div className="pform">
-      <h2 className="pform-ttl">{initial?.id?"Edit Produk":"Tambah Produk"}</h2>
-      
+      <h2 className="pform-ttl">{initial?.id ? "Edit Produk" : "Tambah Produk"}</h2>
+
+      {/* Notifikasi toast sederhana */}
+      {savedMessage && (
+        <div style={{
+          background: savedMessage.includes("✅") ? "#4caf8220" : "#e05a5a20",
+          border: `1px solid ${savedMessage.includes("✅") ? "#4caf82" : "#e05a5a"}`,
+          color: savedMessage.includes("✅") ? "var(--green)" : "var(--red)",
+          padding: "8px 12px",
+          borderRadius: "8px",
+          marginBottom: "12px",
+          fontWeight: "bold",
+          fontSize: ".9rem"
+        }}>
+          {savedMessage}
+        </div>
+      )}
+
       <div className="pform-imgs">
-        <img src={prev||IMG_PH} alt="prev" className="pform-prev" 
-          onError={e=>{e.target.onerror=null;e.target.src=IMG_PH;}}/>
+        <img src={prev || IMG_PH} alt="prev" className="pform-prev"
+          onError={e => { e.target.onerror = null; e.target.src = IMG_PH; }} />
         <div className="pform-imgctl">
           <label className="btn-upload">
-            <Ic.Upload/> {file ? `📎 ${file.name}` : "Upload Foto"}
-            <input type="file" accept="image/*" hidden 
-              onChange={e=>{
-                const fl=e.target.files[0];
-                if(!fl) return;
-                if(fl.size > 5*1024*1024) {
+            <Ic.Upload /> {file ? `📎 ${file.name}` : "Upload Foto"}
+            <input type="file" accept="image/*" hidden
+              onChange={e => {
+                const fl = e.target.files[0];
+                if (!fl) return;
+                if (fl.size > 5 * 1024 * 1024) {
                   alert("Ukuran file terlalu besar! Maksimal 5MB.");
                   return;
                 }
-                console.log("📎 File dipilih:", fl.name, fl.size);
                 setFile(fl);
                 setPrev(URL.createObjectURL(fl));
                 setUploadError("");
+                setSavedMessage("");
               }}
             />
           </label>
           {file && (
-            <button type="button" className="btn-cancel" style={{padding:"2px 8px",fontSize:".7rem"}}
-              onClick={()=>{setFile(null); setPrev(getImg(initial||{}));}}>
+            <button type="button" className="btn-cancel" style={{ padding: "2px 8px", fontSize: ".7rem" }}
+              onClick={() => { setFile(null); setPrev(getImg(initial || {})); }}>
               Batal Pilih File
             </button>
           )}
-          {up && uploadProgress>0 && (
-            <div style={{width:"100%",height:"6px",background:"var(--bg3)",borderRadius:"3px",overflow:"hidden"}}>
-              <div style={{width:uploadProgress+"%",height:"100%",background:"var(--gold)",transition:"width .3s"}}/>
+          {uploading && (
+            <div style={{ width: "100%", height: "6px", background: "var(--bg3)", borderRadius: "3px", overflow: "hidden" }}>
+              <div style={{ width: uploadProgress + "%", height: "100%", background: "var(--gold)", transition: "width .3s" }} />
             </div>
           )}
           <div className="url-row">
-            <input className="finput" placeholder="atau paste URL gambar…" 
-              value={iu} onChange={e=>setIU(e.target.value)}
-              onKeyDown={e=>e.key==="Enter"&&handleAddUrl()}
-            />
+            <input className="finput" placeholder="atau paste URL gambar…"
+              value={iu} onChange={e => setIU(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleAddUrl()} />
             <button type="button" className="btn-addurl" onClick={handleAddUrl}>+</button>
           </div>
-          {uploadError && <p className="errmsg" style={{color:"var(--red)",fontSize:".75rem"}}>{uploadError}</p>}
-          {Array.isArray(f.images) && f.images.length>0 && (
-            <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:4}}>
-              {f.images.map((url,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:4,
-                  background:"var(--bg3)",padding:"2px 6px",borderRadius:4,fontSize:".7rem"}}>
-                  <span>🖼️ {url.length>30?url.slice(0,30)+"...":url}</span>
-                  <button type="button" onClick={()=>removeImage(url)}
-                    style={{background:"none",border:"none",color:"var(--red)",cursor:"pointer"}}>✕</button>
-                </div>
-              ))}
+          {uploadError && <p className="errmsg" style={{ color: "var(--red)", fontSize: ".75rem" }}>{uploadError}</p>}
+          {Array.isArray(f.images) && f.images.length > 0 && (
+            <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+              {f.images.map((url, i) => {
+                // Ambil nama file dari URL (jika ada)
+                const fileName = url.split('/').pop()?.split('?')[0] || "gambar";
+                return (
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: 4,
+                    background: "var(--bg3)", padding: "2px 6px", borderRadius: 4, fontSize: ".7rem"
+                  }}>
+                    <span>🖼️ {fileName.length > 25 ? fileName.slice(0, 25) + "..." : fileName}</span>
+                    <button type="button" onClick={() => removeImage(url)}
+                      style={{ background: "none", border: "none", color: "var(--red)", cursor: "pointer" }}>✕</button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1084,44 +1104,45 @@ function ProductForm({initial,onSave,onCancel,saving}) {
 
       <div className="pform-grid">
         <div className="fg"><label>Nama *</label>
-          <input className="finput" value={f.name} onChange={e=>ch("name",e.target.value)}/></div>
-        <div className="fg"><label>Kategori</label>
-          <input className="finput" value={f.category} onChange={e=>ch("category",e.target.value)}/></div>
+          <input className="finput" value={f.name} onChange={e => ch("name", e.target.value)} /></div>
+        {/* Ganti Kategori dengan Size */}
+        <div className="fg"><label>Size / Ukuran</label>
+          <input className="finput" value={f.size || ""} onChange={e => ch("size", e.target.value)} placeholder="misal: 50ml, 100ml" /></div>
         <div className="fg"><label>Gender</label>
-          <select className="finput" value={f.gender} onChange={e=>ch("gender",e.target.value)}>
+          <select className="finput" value={f.gender} onChange={e => ch("gender", e.target.value)}>
             <option value="">—</option><option value="male">Male</option>
             <option value="female">Female</option><option value="unisex">Unisex</option>
           </select></div>
         <div className="fg"><label>Harga (Rp)*</label>
-          <input type="number" className="finput" value={f.price} onChange={e=>ch("price",e.target.value)}/></div>
+          <input type="number" className="finput" value={f.price} onChange={e => ch("price", e.target.value)} /></div>
         <div className="fg"><label>Stok</label>
-          <input type="number" className="finput" value={f.stock} onChange={e=>ch("stock",e.target.value)}/></div>
+          <input type="number" className="finput" value={f.stock} onChange={e => ch("stock", e.target.value)} /></div>
         <div className="fg"><label>Rating</label>
-          <input type="number" step="0.1" min="0" max="5" className="finput" 
-            value={f.rating} onChange={e=>ch("rating",e.target.value)}/></div>
+          <input type="number" step="0.1" min="0" max="5" className="finput"
+            value={f.rating} onChange={e => ch("rating", e.target.value)} /></div>
         <div className="fg"><label>Terjual</label>
-          <input type="number" className="finput" value={f.sold} onChange={e=>ch("sold",e.target.value)}/></div>
+          <input type="number" className="finput" value={f.sold} onChange={e => ch("sold", e.target.value)} /></div>
         <div className="fg"><label>Aroma</label>
-          <input className="finput" value={f.aroma||""} onChange={e=>ch("aroma",e.target.value)}/></div>
+          <input className="finput" value={f.aroma || ""} onChange={e => ch("aroma", e.target.value)} /></div>
       </div>
 
-      <div className="fg" style={{marginBottom:12}}>
+      <div className="fg" style={{ marginBottom: 12 }}>
         <label>Deskripsi</label>
-        <textarea className="finput ftarea" rows={4} value={f.desc||""} 
-          onChange={e=>ch("desc",e.target.value)}/>
+        <textarea className="finput ftarea" rows={4} value={f.desc || ""}
+          onChange={e => ch("desc", e.target.value)} />
       </div>
 
       <div className="pform-checks">
-        <label className="chk"><input type="checkbox" checked={!!f.bestSeller} 
-          onChange={e=>ch("bestSeller",e.target.checked)}/> Best Seller</label>
-        <label className="chk"><input type="checkbox" checked={!!f.isActive} 
-          onChange={e=>ch("isActive",e.target.checked)}/> Aktif/Tampil</label>
+        <label className="chk"><input type="checkbox" checked={!!f.bestSeller}
+          onChange={e => ch("bestSeller", e.target.checked)} /> Best Seller</label>
+        <label className="chk"><input type="checkbox" checked={!!f.isActive}
+          onChange={e => ch("isActive", e.target.checked)} /> Aktif/Tampil</label>
       </div>
 
       <div className="form-acts">
         <button type="button" className="btn-cancel" onClick={onCancel}>Batal</button>
-        <button type="button" className="btn-save" onClick={submit} disabled={saving||up}>
-          {up ? `⏳ Uploading… ${uploadProgress}%` : (saving ? "⏳ Menyimpan…" : "Simpan")}
+        <button type="button" className="btn-save" onClick={submit} disabled={saving || uploading}>
+          {uploading ? `⏳ Uploading… ${uploadProgress}%` : (saving ? "⏳ Menyimpan…" : "Simpan")}
         </button>
       </div>
     </div>
@@ -1210,7 +1231,6 @@ export default function App() {
   if(sort==="sold")       list=[...list].sort((a,b)=>(b.sold||0)-(a.sold||0));
 
   const handleSave = async (data) => {
-    // Fungsi ini hanya dipanggil untuk menutup modal setelah produk tersimpan
     setShowForm(false);
     setEditP(null);
   };
